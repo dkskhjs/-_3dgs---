@@ -1415,7 +1415,6 @@ function renderAlign() {
       : `이 스캔은 '${anchor.name}'(앵커)에 맞춰져 있습니다. 이번 기준 '${rr?.name ?? ""}'은 스캔에 맞춰 움직입니다.`;
   }
   $("xform-box").classList.toggle("hidden", fixedRef);
-  $("fixed-note").classList.toggle("hidden", !fixedRef);
   $("al-level-wrap").classList.toggle("hidden", rr?.type !== "bim");
   if (rr?.type === "bim") {
     const lowest = rr.levels[0]?.y ?? 0;

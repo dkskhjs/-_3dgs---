@@ -185,49 +185,35 @@
                     <div class="space-y-2">
                         <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider flex items-center justify-between">
                             <span><i class="fa-solid fa-cube text-zzikbang mr-1"></i>3DGS 스캔</span>
-                            <span class="text-[10px] text-zzikbang font-normal bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">필수</span>
                         </label>
-                        <div class="relative border-2 border-dashed border-gray-200 hover:border-zzikbang rounded-2xl p-4 text-center bg-gray-50/50 hover:bg-orange-50/20 transition-all cursor-pointer group" id="dropzone-ply">
+                        <div class="relative border-2 border-dashed border-gray-200 hover:border-zzikbang rounded-xl p-2.5 text-center bg-gray-50/50 hover:bg-orange-50/20 transition-all cursor-pointer group" id="dropzone-ply" title="PLY · SPZ · SPLAT · KSPLAT (여러 개 가능)">
                             <input type="file" id="input-ply" accept=".ply,.spz,.splat,.ksplat,.sog" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-                            <div class="flex flex-col items-center justify-center space-y-2">
-                                <div class="w-10 h-10 rounded-full bg-orange-100 text-zzikbang flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-cloud-arrow-up text-lg"></i></div>
-                                <div>
-                                    <p class="text-xs font-bold text-gray-800">3DGS 스캔 파일 선택</p>
-                                    <p class="text-[11px] text-gray-400 mt-0.5">Scaniverse PLY / SPZ 권장 · SPLAT · KSPLAT — 날짜별 여러 개 가능</p>
-                                </div>
-                            </div>
+                            <div class="flex items-center justify-center gap-2 text-xs font-bold text-gray-700"><i class="fa-solid fa-cloud-arrow-up text-zzikbang"></i>스캔 열기</div>
                         </div>
                         <div class="flex items-center gap-2">
                             <div class="flex flex-col gap-1">
-                                <label class="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 cursor-pointer"><input type="checkbox" id="floor-auto" checked class="accent-[#FF6B00]"> 업로드 시 바닥 자동 인식</label>
-                                <label class="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 cursor-pointer" title="3DGS가 공간 바깥에 만든 하늘·먼 배경 스플랫(구체 껍질)을 숨깁니다"><input type="checkbox" id="bg-crop" checked class="accent-[#FF6B00]"> 원거리 배경 숨김</label>
+                                <label class="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 cursor-pointer"><input type="checkbox" id="floor-auto" checked class="accent-[#FF6B00]"> 바닥 자동</label>
+                                <label class="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 cursor-pointer" title="3DGS가 공간 바깥에 만든 하늘·먼 배경 스플랫(구체 껍질)을 숨깁니다"><input type="checkbox" id="bg-crop" checked class="accent-[#FF6B00]"> 배경 숨김</label>
                             </div>
                             <select id="floor-mode" class="inp ml-auto text-[11px]" style="width:auto" title="바닥 인식 방식">
-                                <option value="scaniverse">Scaniverse (LiDAR)</option>
+                                <option value="scaniverse">Scaniverse</option>
                                 <option value="auto">자동</option>
-                                <option value="plane">평면 검출 (3DGS)</option>
-                                <option value="gravity">중력 정렬 (LiDAR)</option>
+                                <option value="plane">평면 검출</option>
+                                <option value="gravity">중력 정렬</option>
                             </select>
                         </div>
                         <div id="scan-list" class="space-y-2"></div>
-                        <button id="btn-add-ply" class="btn-sub w-full hidden"><i class="fa-solid fa-plus"></i>스캔 추가 (다른 날짜 공정)</button>
+                        <button id="btn-add-ply" class="btn-sub w-full hidden"><i class="fa-solid fa-plus"></i>스캔 추가</button>
                     </div>
 
                     <!-- 2. Drawing / BIM upload -->
                     <div class="space-y-2">
                         <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider flex items-center justify-between">
                             <span><i class="fa-solid fa-cubes text-blue-500 mr-1"></i>도면 / BIM</span>
-                            <span class="text-[10px] text-gray-400 font-normal">CAD / BIM</span>
                         </label>
-                        <div class="relative border-2 border-dashed border-gray-200 hover:border-blue-400 rounded-2xl p-4 text-center bg-gray-50/50 hover:bg-blue-50/20 transition-all cursor-pointer group" id="dropzone-cad">
+                        <div class="relative border-2 border-dashed border-gray-200 hover:border-blue-400 rounded-xl p-2.5 text-center bg-gray-50/50 hover:bg-blue-50/20 transition-all cursor-pointer group" id="dropzone-cad" title="PDF · DWG · DXF · IFC · STL · OBJ · glTF · 이미지">
                             <input type="file" id="input-cad" accept=".pdf,.dwg,.dxf,.ifc,.rvt,.skp,.stl,.dae,.kmz,.obj,.glb,.gltf,.fbx,.png,.jpg,.jpeg,.webp" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-                            <div class="flex flex-col items-center justify-center space-y-2">
-                                <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-cubes text-lg"></i></div>
-                                <div>
-                                    <p class="text-xs font-bold text-gray-800">도면 / 모델링 파일 업로드</p>
-                                    <p class="text-[11px] text-gray-400 mt-0.5">PDF · DWG · DXF · IFC · STL(SketchUp) · 이미지 등</p>
-                                </div>
-                            </div>
+                            <div class="flex items-center justify-center gap-2 text-xs font-bold text-gray-700"><i class="fa-solid fa-cloud-arrow-up text-blue-500"></i>도면 / BIM 열기</div>
                         </div>
                         <div id="ref-list" class="space-y-2"></div>
                         <button id="btn-add-cad" class="btn-sub w-full hidden"><i class="fa-solid fa-plus"></i>도면 / BIM 추가</button>
@@ -244,7 +230,6 @@
                 <div class="text-center text-gray-400 max-w-sm px-6">
                     <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-zzikbang text-2xl"><i class="fa-solid fa-cube"></i></div>
                     <p class="text-sm font-bold text-gray-200">3DGS 스캔과 도면을 올려주세요</p>
-                    <p class="text-xs mt-1 leading-relaxed">오른쪽 패널에서 .ply / .spz 스캔과 PDF · DWG · DXF · IFC 도면을 업로드하세요.</p>
                 </div>
             </div>
 
@@ -335,26 +320,26 @@
                     <!-- 3. View & section -->
                     <div class="space-y-3">
                         <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider flex items-center justify-between">
-                            <span>1. 뷰 생성 및 섹션 절단</span>
+                            <span>뷰 · 절단</span>
                             <label class="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 normal-case tracking-normal cursor-pointer">
-                                <input type="checkbox" id="cut-on" class="accent-[#FF6B00]"> 절단 적용
+                                <input type="checkbox" id="cut-on" class="accent-[#FF6B00]"> 절단
                             </label>
                         </label>
                         <div class="grid grid-cols-3 gap-1.5 p-1 bg-gray-100 rounded-xl text-xs font-medium">
                             <button data-view="plan" class="seg-btn view-btn py-2 rounded-lg text-gray-600 text-center transition-all">
-                                <i class="fa-solid fa-layer-group mb-1 block text-sm"></i>평면 (Plan)
+                                <i class="fa-solid fa-layer-group mb-1 block text-sm"></i>평면
                             </button>
                             <button data-view="elevation" class="seg-btn view-btn py-2 rounded-lg text-gray-600 text-center transition-all">
-                                <i class="fa-solid fa-building mb-1 block text-sm"></i>입면 (Elev)
+                                <i class="fa-solid fa-building mb-1 block text-sm"></i>입면
                             </button>
                             <button data-view="section" class="seg-btn view-btn py-2 rounded-lg text-gray-600 text-center transition-all">
-                                <i class="fa-solid fa-scissors mb-1 block text-sm"></i>단면 (Cut)
+                                <i class="fa-solid fa-scissors mb-1 block text-sm"></i>단면
                             </button>
                         </div>
                         <div class="bg-gray-50 p-3 rounded-xl border border-gray-200/80 space-y-3">
                             <div>
                                 <div class="flex justify-between items-center text-xs mb-1">
-                                    <span class="font-semibold text-gray-700">뷰 높이 (Height)</span>
+                                    <span class="font-semibold text-gray-700">높이</span>
                                     <div class="flex items-center space-x-1">
                                         <input type="number" id="num-view-height" value="1.20" step="0.05" class="w-16 px-1.5 py-0.5 border border-gray-300 rounded text-right text-xs font-mono font-bold focus:border-zzikbang focus:outline-none">
                                         <span class="text-gray-500 text-[11px]">m</span>
@@ -364,7 +349,7 @@
                             </div>
                             <div>
                                 <div class="flex justify-between items-center text-xs mb-1">
-                                    <span class="font-semibold text-gray-700">뷰 깊이 (Depth)</span>
+                                    <span class="font-semibold text-gray-700">깊이</span>
                                     <div class="flex items-center space-x-1">
                                         <input type="number" id="num-view-depth" value="0.50" step="0.05" class="w-16 px-1.5 py-0.5 border border-gray-300 rounded text-right text-xs font-mono font-bold focus:border-zzikbang focus:outline-none">
                                         <span class="text-gray-500 text-[11px]">m</span>
@@ -372,8 +357,8 @@
                                 </div>
                                 <input type="range" id="range-view-depth" min="0.05" max="3.0" step="0.01" value="0.50">
                             </div>
-                            <p class="text-[11px] text-gray-400 leading-snug" id="view-desc">평면: 뷰 높이 위를 잘라내고 위에서 내려다봅니다.</p>
-                            <button id="btn-height-to-ref" class="btn-sub w-full"><i class="fa-solid fa-arrows-up-to-line"></i>뷰 높이 = 도면 레벨 + 1.2 m</button>
+                            <p class="hidden" id="view-desc">평면: 뷰 높이 위를 잘라내고 위에서 내려다봅니다.</p>
+                            <button id="btn-height-to-ref" class="btn-sub w-full"><i class="fa-solid fa-arrows-up-to-line"></i>레벨 + 1.2 m</button>
                         </div>
                     </div>
 
@@ -381,7 +366,7 @@
 
                     <!-- 2. Scan colour -->
                     <div class="space-y-2">
-                        <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">2. 스캔 색상</label>
+                        <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">스캔 색상</label>
                         <div class="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-lg text-[11px] font-semibold" id="scan-color-mode">
                             <button data-mode="orig" class="py-1.5 rounded-md bg-white shadow-xs text-gray-800"><i class="fa-solid fa-palette mr-1"></i>원본</button>
                             <button data-mode="gray" class="py-1.5 rounded-md text-gray-500"><i class="fa-solid fa-circle-half-stroke mr-1"></i>흑백</button>
@@ -398,9 +383,9 @@
 
                     <!-- 3. Opacity -->
                     <div class="space-y-4">
-                        <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">3. 레이어 투명도 조절</label>
+                        <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">투명도</label>
                         <div class="flex items-center gap-2 text-[11px] text-gray-600">
-                            <span title="스캔과 BIM이 겹칠 때 어느 쪽을 앞에 그릴지 (보는 각도와 상관없이 고정)"><i class="fa-solid fa-layer-group mr-1"></i>앞에 표시</span>
+                            <span title="스캔과 BIM이 겹칠 때 어느 쪽을 앞에 그릴지 (보는 각도와 상관없이 고정)"><i class="fa-solid fa-layer-group mr-1"></i>앞</span>
                             <div class="grid grid-cols-2 gap-1 bg-gray-100 p-1 rounded-lg font-semibold flex-1" id="front-mode">
                                 <button data-front="scan" class="py-1 rounded-md bg-white shadow-xs text-gray-800">스캔</button>
                                 <button data-front="bim" class="py-1 rounded-md text-gray-500">BIM</button>
@@ -408,19 +393,18 @@
                         </div>
                         <div class="bg-orange-50/40 border border-orange-100 p-3 rounded-xl space-y-2">
                             <div class="flex justify-between items-center">
-                                <span class="text-xs font-bold text-gray-800 flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-zzikbang mr-1.5"></span>3DGS 스캔 투명도</span>
+                                <span class="text-xs font-bold text-gray-800 flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-zzikbang mr-1.5"></span>스캔</span>
                                 <span id="label-ply-opacity" class="text-xs font-mono font-extrabold text-zzikbang">100%</span>
                             </div>
                             <input type="range" id="slider-ply-opacity" min="0" max="100" value="100">
                         </div>
                         <div class="bg-blue-50/40 border border-blue-100 p-3 rounded-xl space-y-2">
                             <div class="flex justify-between items-center">
-                                <span class="text-xs font-bold text-gray-800 flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 mr-1.5"></span>도면/모델 투명도</span>
+                                <span class="text-xs font-bold text-gray-800 flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 mr-1.5"></span>도면 / BIM</span>
                                 <span id="label-cad-opacity" class="text-xs font-mono font-extrabold text-blue-600">80%</span>
                             </div>
                             <input type="range" id="slider-cad-opacity" class="blue" min="0" max="100" value="80">
                         </div>
-                        <p class="text-[11px] text-gray-400">개별 레이어 투명도는 왼쪽 레이어 목록의 슬라이더로 조절합니다.</p>
                     </div>
                 </div>
 
@@ -474,7 +458,7 @@
                             <label class="block"><span class="text-[10px] text-gray-500">해상도 DPI</span><input type="number" id="al-dpi" value="150" class="inp"></label>
                             <button id="al-ratio-apply" class="btn-sub h-[28px]">비율 적용</button>
                         </div>
-                        <p id="al-scale-info" class="text-[11px] text-gray-400 leading-snug"></p>
+                        <p id="al-scale-info" class="hidden"></p>
                     </div>
 
                     <!-- Step 3 -->
@@ -593,7 +577,7 @@
                             <label class="block"><span class="text-[10px] text-gray-500">Y 높이 (m)</span><input type="number" step="0.01" id="xf-y" class="inp"></label>
                             <label class="block"><span class="text-[10px] text-gray-500">회전 (°)</span><input type="number" step="0.1" id="xf-rot" class="inp"></label>
                         </div>
-                        <p id="fixed-note" class="hidden text-[11px] text-gray-400"><i class="fa-solid fa-lock mr-1"></i>2D 도면 고정 · 스캔만 이동</p>
+                        <p id="fixed-note" class="hidden"></p>
                     </div>
 
                     <!-- Step 5: scan -> IFC -->
