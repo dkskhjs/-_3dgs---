@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>찍방 - 3D 공간 스캔 & 도면 비교 분석 시스템</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Pretendard Web Font -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+            "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.3.1/dist/spark.module.js"
+        }
+    }
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        zzikbang: {
+                            DEFAULT: '#FF6B00',
+                            hover: '#E56000',
+                            light: '#FFF2EB',
+                            border: '#FFE3D1',
+                            sub: '#4A5568'
+                        },
+                        sidebar: {
+                            bg: '#FFFFFF',
+                            hover: '#F8F9FA',
+                            active: '#FFF2EB',
+                            text: '#2D3748',
+                            muted: '#A0AEC0'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'floating': '0 8px 30px rgba(0, 0, 0, 0.12)',
+                        'card': '0 2px 10px rgba(0, 0, 0, 0.04)',
+                        'panel': '-4px 0 20px rgba(0, 0, 0, 0.05)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #F4F5F7;
+            overflow: hidden;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #F1F1F1; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #A0AEC0; }
+
+        /* Range Slider Styling */
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; cursor: pointer; background: #E2E8F0; border-radius: 9999px; }
+        input[type=range]::-webkit-slider-thumb {
+            height: 18px; width: 18px; border-radius: 50%; background: #FF6B00; cursor: pointer; -webkit-appearance: none;
+            margin-top: -6px; box-shadow: 0 2px 5px rgba(255, 107, 0, 0.4); transition: transform 0.1s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        input[type=range].blue::-webkit-slider-thumb { background: #3B82F6; box-shadow: 0 2px 5px rgba(59, 130, 246, 0.4); }
+        input[type=range].sm::-webkit-slider-runnable-track { height: 4px; }
+        input[type=range].sm::-webkit-slider-thumb { height: 14px; width: 14px; margin-top: -5px; }
+        input[type=range]::-moz-range-track { height: 6px; background: #E2E8F0; border-radius: 9999px; }
+        input[type=range]::-moz-range-thumb { height: 16px; width: 16px; border: 0; border-radius: 50%; background: #FF6B00; }
+
+        /* component classes below set display, so keep Tailwind's .hidden winning whatever the load order */
+        .hidden { display: none !important; }
+        /* layer browser (left) / properties (right): the browser floats over the canvas on narrow screens */
+        #sidebar { display: flex; }
+        #sidebar-toggle { display: none; }
+        @media (max-width: 767px) {
+            #sidebar { display: none; position: absolute; top: 0; bottom: 0; left: 0; box-shadow: 0 10px 30px rgba(0,0,0,.15); }
+            #sidebar.open { display: flex; }
+            #sidebar-toggle { display: inline-block; }
+        }
+        @media (max-width: 639px) { .align-label { display: none; } }
+        .step-collapsed > :not(:first-child) { display:none !important; }
+        .step-head { cursor: pointer; user-select: none; }
+        .step-collapsed .step-chev { transform: rotate(-90deg); }
+        #canvas-container { position: relative; width: 100%; height: 100%; }
+        #canvas-container canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+        .drawer-transition { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        #right-panel.collapsed { transform: translateX(100%); margin-left: -20rem; }
+
+        /* 3D overlay labels */
+        .lbl3d { color: #fff; background: rgba(17,24,39,.85); padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+        .pick3d { color: #111; background: #facc15; border-radius: 9999px; min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; font-size: 11px; font-weight: 800; pointer-events: none; border: 2px solid #111; transform: translateY(-14px); }
+        .dim3d { color: #fff; background: #f59e0b; padding: 1px 6px; border-radius: 6px; font-size: 11px; font-weight: 800; white-space: nowrap; pointer-events: none; font-family: 'JetBrains Mono', monospace; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+        .mk3d { color: #fff; background: #dc2626; border-radius: 9999px; padding: 1px 7px; font-size: 11px; font-weight: 800; pointer-events: none; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); transform: translateY(-14px); }
+        .ref3d { color: #fff; background: #FF6B00; border-radius: 6px; padding: 1px 6px; font-size: 11px; font-weight: 800; pointer-events: none; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); transform: translateY(-14px); }
+        .pin3d { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: translateY(-14px) rotate(-45deg);
+            color: #fff; font-weight: 800; font-size: 11px; border: 2px solid #fff; cursor: pointer; pointer-events: auto; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+        .pin3d span { transform: rotate(45deg); }
+
+        .tool-btn.active { background: #FFF2EB; color: #FF6B00; }
+        .seg-btn.active { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.06); font-weight: 700; color: #FF6B00; border: 1px solid #FFE3D1; }
+        .nudge { height: 30px; border-radius: 8px; border: 1px solid #E5E7EB; background: #fff; font-size: 11px; font-weight: 600; color: #374151; }
+        .nudge:hover { border-color: #FF6B00; color: #FF6B00; }
+        .inp { width: 100%; padding: 4px 6px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 12px; background: #fff; }
+        .inp:focus { border-color: #FF6B00; outline: none; }
+        .btn-sub { padding: 6px 8px; border-radius: 10px; border: 1px solid #E5E7EB; background: #fff; font-size: 11px; font-weight: 700; color: #374151; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .btn-sub:hover { border-color: #FF6B00; color: #FF6B00; }
+        .btn-sub:disabled { opacity: .45; cursor: not-allowed; }
+        .btn-main { padding: 9px; border-radius: 12px; background: #FF6B00; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 10px rgba(255,107,0,.2); }
+        .btn-main:hover { background: #E56000; }
+        .btn-main:disabled { opacity: .5; }
+        .step-num { width: 20px; height: 20px; border-radius: 9999px; background: #FF6B00; color: #fff; font-size: 11px; font-weight: 800; display: inline-grid; place-items: center; flex: none; }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col antialiased text-gray-800 select-none">
+
+    <!-- Top Header Bar -->
+    <header class="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-20 shrink-0">
+        <div class="flex items-center space-x-3 min-w-0">
+            <button id="sidebar-toggle" class="p-2 rounded-lg text-gray-500 hover:bg-gray-100" title="레이어">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="flex items-center space-x-2 text-sm text-gray-600 min-w-0">
+                <button class="hidden sm:flex items-center space-x-1 px-2.5 py-1 rounded-md border border-gray-200 hover:bg-gray-50 text-xs font-medium text-gray-700 bg-white">
+                    <i class="fa-solid fa-arrow-left text-xs"></i>
+                    <span>목록</span>
+                </button>
+                <span class="text-gray-300 hidden sm:inline">/</span>
+                <span class="font-bold text-gray-900 text-base whitespace-nowrap">공간 스캔</span>
+                <span id="header-date" class="hidden md:inline text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">-</span>
+                <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-zzikbang-light text-zzikbang">
+                    <i class="fa-solid fa-cube text-[10px] mr-1"></i> 아키톤데모
+                </span>
+            </div>
+        </div>
+
+        <!-- Top Right Actions -->
+        <div class="flex items-center space-x-3">
+            <div class="flex bg-gray-100 p-1 rounded-lg text-xs font-medium text-gray-600" id="layer-tabs">
+                <button data-layer="all" class="layer-tab px-3 py-1 rounded-md bg-white shadow-xs font-bold text-gray-800">전체</button>
+                <button data-layer="scan" class="layer-tab px-3 py-1 rounded-md hover:text-gray-900">3DGS 스캔</button>
+                <button data-layer="ref" class="layer-tab px-3 py-1 rounded-md hover:text-gray-900">BIM/도면</button>
+            </div>
+            <button id="btn-sync-align" class="px-3 py-1.5 rounded-lg bg-zzikbang text-white text-xs font-bold hover:opacity-90 flex items-center gap-1.5 shadow-sm whitespace-nowrap"><i class="fa-solid fa-arrows-to-eye"></i><span class="align-label">스캔본 & 도면 위치 정렬</span></button>
+            <button id="toggle-right-panel" class="p-2 text-gray-600 hover:bg-gray-100 rounded-lg relative" title="제어 패널 열기/닫기">
+                <i class="fa-solid fa-sliders text-base"></i>
+                <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-zzikbang rounded-full"></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- 1. Left Sidebar -->
+        <aside id="sidebar" class="w-72 bg-white border-r border-gray-200 flex-col shrink-0 z-30 transition-all duration-300">
+            <div class="px-4 py-3 flex items-center gap-2 border-b border-gray-100">
+                <div class="w-7 h-7 bg-zzikbang rounded-lg flex items-center justify-center text-white font-extrabold text-sm shadow-md tracking-tighter">ZZ</div>
+                <span class="font-extrabold text-base tracking-tight text-gray-900">찍방 <span class="text-[10px] font-normal text-zzikbang font-mono">SCAN</span></span>
+                <nav class="ml-auto flex items-center gap-0.5"><a href="#" title="일정표" class="w-8 h-8 rounded-lg grid place-items-center text-gray-400 hover:bg-sidebar-hover hover:text-gray-700"><i class="fa-regular fa-calendar-check "></i></a><a href="#" title="공간 스캔" class="w-8 h-8 rounded-lg grid place-items-center bg-zzikbang-light text-zzikbang"><i class="fa-solid fa-box-archive "></i></a><a href="#" title="공정표" class="w-8 h-8 rounded-lg grid place-items-center text-gray-400 hover:bg-sidebar-hover hover:text-gray-700"><i class="fa-solid fa-list-check "></i></a><a href="#" title="멤버" class="w-8 h-8 rounded-lg grid place-items-center text-gray-400 hover:bg-sidebar-hover hover:text-gray-700"><i class="fa-regular fa-user "></i></a><a href="#" title="자료실" class="w-8 h-8 rounded-lg grid place-items-center text-gray-400 hover:bg-sidebar-hover hover:text-gray-700"><i class="fa-regular fa-folder-open "></i></a></nav>
+            </div>
+            <div class="px-4 pt-3 pb-1 flex items-center gap-2">
+                <i class="fa-solid fa-layer-group text-zzikbang text-sm"></i>
+                <h2 class="font-bold text-gray-900 text-sm">레이어</h2>
+            </div>
+            <div class="flex-1 overflow-y-auto px-4 pb-4 pt-2 space-y-6">
+                    <!-- 1. Scan upload -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider flex items-center justify-between">
+                            <span><i class="fa-solid fa-cube text-zzikbang mr-1"></i>3DGS 스캔</span>
+                            <span class="text-[10px] text-zzikbang font-normal bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">필수</span>
+                        </label>
+                        <div class="relative border-2 border-dashed border-gray-200 hover:border-zzikbang rounded-2xl p-4 text-center bg-gray-50/50 hover:bg-orange-50/20 transition-all cursor-pointer group" id="dropzone-ply">
+                            <input type="file" id="input-ply" accept=".ply,.spz,.splat,.ksplat,.sog" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                            <div class="flex flex-col items-center justify-center space-y-2">
+                                <div class="w-10 h-10 rounded-full bg-orange-100 text-zzikbang flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-cloud-arrow-up text-lg"></i></div>
+                                <div>
+                                    <p class="text-xs font-bold text-gray-800">3DGS 스캔 파일 선택</p>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">Scaniverse PLY / SPZ 권장 · SPLAT · KSPLAT — 날짜별 여러 개 가능</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="flex flex-col gap-1">
+                                <label class="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 cursor-pointer"><input type="checkbox" id="floor-auto" checked class="accent-[#FF6B00]"> 업로드 시 바닥 자동 인식</label>
+                                <label class="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 cursor-pointer" title="3DGS가 공간 바깥에 만든 하늘·먼 배경 스플랫(구체 껍질)을 숨깁니다"><input type="checkbox" id="bg-crop" checked class="accent-[#FF6B00]"> 원거리 배경 숨김</label>
+                            </div>
+                            <select id="floor-mode" class="inp ml-auto text-[11px]" style="width:auto" title="바닥 인식 방식">
+                                <option value="scaniverse">Scaniverse (LiDAR)</option>
+                                <option value="auto">자동</option>
+                                <option value="plane">평면 검출 (3DGS)</option>
+                                <option value="gravity">중력 정렬 (LiDAR)</option>
+                            </select>
+                        </div>
+                        <div id="scan-list" class="space-y-2"></div>
+                        <button id="btn-add-ply" class="btn-sub w-full hidden"><i class="fa-solid fa-plus"></i>스캔 추가 (다른 날짜 공정)</button>
+                    </div>
+
+                    <!-- 2. Drawing / BIM upload -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider flex items-center justify-between">
+                            <span><i class="fa-solid fa-cubes text-blue-500 mr-1"></i>도면 / BIM</span>
+                            <span class="text-[10px] text-gray-400 font-normal">CAD / BIM</span>
+                        </label>
+                        <div class="relative border-2 border-dashed border-gray-200 hover:border-blue-400 rounded-2xl p-4 text-center bg-gray-50/50 hover:bg-blue-50/20 transition-all cursor-pointer group" id="dropzone-cad">
+                            <input type="file" id="input-cad" accept=".pdf,.dwg,.dxf,.ifc,.rvt,.skp,.stl,.dae,.kmz,.obj,.glb,.gltf,.fbx,.png,.jpg,.jpeg,.webp" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                            <div class="flex flex-col items-center justify-center space-y-2">
+                                <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-cubes text-lg"></i></div>
+                                <div>
+                                    <p class="text-xs font-bold text-gray-800">도면 / 모델링 파일 업로드</p>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">PDF · DWG · DXF · IFC · STL(SketchUp) · 이미지 등</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="ref-list" class="space-y-2"></div>
+                        <button id="btn-add-cad" class="btn-sub w-full hidden"><i class="fa-solid fa-plus"></i>도면 / BIM 추가</button>
+                    </div>
+            </div>
+        </aside>
+
+        <!-- 2. Main 3D Canvas Container -->
+        <main class="flex-1 relative bg-gray-900 overflow-hidden min-w-0">
+            <div id="canvas-container"><canvas id="c"></canvas></div>
+
+            <!-- Empty state -->
+            <div id="empty-state" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div class="text-center text-gray-400 max-w-sm px-6">
+                    <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-zzikbang text-2xl"><i class="fa-solid fa-cube"></i></div>
+                    <p class="text-sm font-bold text-gray-200">3DGS 스캔과 도면을 올려주세요</p>
+                    <p class="text-xs mt-1 leading-relaxed">오른쪽 패널에서 .ply / .spz 스캔과 PDF · DWG · DXF · IFC 도면을 업로드하세요.</p>
+                </div>
+            </div>
+
+            <!-- Viewport Controls (Top Right) -->
+            <div class="absolute top-4 right-4 flex flex-col space-y-2 z-10">
+                <div class="bg-white/90 backdrop-blur-md p-1.5 rounded-xl shadow-lg border border-white/50 flex flex-col space-y-1 text-gray-700">
+                    <button id="btn-reset-view" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-sm" title="뷰 리셋 (전체 맞춤)"><i class="fa-solid fa-compass"></i></button>
+                    <button id="btn-top-view" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-xs font-bold" title="탑 뷰 (평면)">TOP</button>
+                    <button id="btn-side-view" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-xs font-bold" title="사이드 뷰 (입면)">SIDE</button>
+                    <button id="btn-land" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-sm" title="바닥 착륙 (눈높이 1.5 m로 걷기) · 단축키 Space"><i class="fa-solid fa-person-walking"></i></button>
+                </div>
+            </div>
+
+            <!-- Layer status pills (Top Left) -->
+            <div id="layer-pills" class="absolute top-4 left-4 right-20 z-10 flex flex-wrap gap-2"></div>
+
+            <!-- Guidance bar for picking modes -->
+            <div id="hint" class="hidden absolute top-16 left-1/2 -translate-x-1/2 z-20 max-w-[calc(100%-2rem)]">
+                <div class="bg-gray-900/90 backdrop-blur-md text-white rounded-2xl shadow-floating px-4 py-2.5 flex items-center gap-3 text-xs border border-white/10">
+                    <i class="fa-solid fa-hand-pointer text-zzikbang"></i>
+                    <span id="hint-text" class="font-semibold leading-snug"></span>
+                    <span id="hint-count" class="font-mono font-bold text-zzikbang"></span>
+                    <button id="hint-skip" class="hidden px-2 py-1 rounded-lg border border-white/20 hover:bg-white/10">건너뛰기</button>
+                    <button id="hint-undo" class="px-2 py-1 rounded-lg border border-white/20 hover:bg-white/10">되돌리기</button>
+                    <button id="hint-done" class="hidden px-2 py-1 rounded-lg bg-zzikbang hover:bg-zzikbang-hover font-bold">완료</button>
+                    <button id="hint-cancel" class="px-2 py-1 rounded-lg border border-white/20 hover:bg-white/10">취소 <span class="text-gray-400">Esc</span></button>
+                </div>
+            </div>
+
+            <!-- Loading -->
+            <div id="canvas-loader" class="hidden absolute inset-0 bg-black/40 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-white">
+                <div class="w-12 h-12 border-4 border-zzikbang border-t-transparent rounded-full animate-spin mb-3"></div>
+                <p class="font-semibold text-sm" id="loader-text">파일을 처리하는 중입니다...</p>
+            </div>
+
+            <!-- Popover above toolbar (compare / comments) -->
+            <div id="popover" class="hidden absolute bottom-20 left-1/2 -translate-x-1/2 z-20 w-[min(420px,calc(100%-2rem))] max-h-[55%] overflow-y-auto bg-white rounded-2xl shadow-floating border border-gray-100 p-4"></div>
+
+            <!-- Toast -->
+            <div id="dim-card" style="top:3.5rem;left:1rem;width:min(300px,calc(100% - 2rem));max-height:calc(100% - 9rem)" class="hidden absolute z-20 overflow-y-auto bg-white rounded-2xl shadow-floating border border-gray-100 p-3 text-[11px] text-gray-700"></div>
+            <div id="toast" class="hidden absolute bottom-24 left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-floating max-w-[calc(100%-2rem)] text-center"></div>
+
+            <!-- Navigation help -->
+            <div class="hidden xl:block absolute left-4 bottom-7 z-10 text-[11px] text-gray-400 leading-relaxed pointer-events-none select-none">
+                <b class="text-gray-300">WASD</b> 이동 · <b class="text-gray-300">E/Q</b> 위/아래 · <b class="text-gray-300">Shift</b> 빠르게<br>
+                드래그 회전 · 우클릭 드래그 팬 · 휠 줌 · 더블클릭 회전 중심
+            </div>
+
+            <!-- Floating Bottom Toolbar -->
+            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 max-w-[calc(100%-1rem)]">
+                <div class="bg-white/95 backdrop-blur-md px-3 py-2 rounded-full shadow-floating border border-gray-100 flex items-center space-x-1 sm:space-x-2 overflow-x-auto">
+                    <button id="tool-compare" class="tool-btn flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors whitespace-nowrap">
+                        <i class="fa-solid fa-code-compare text-zzikbang"></i><span>비교</span>
+                    </button>
+                    <button id="tool-diff" class="tool-btn flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors whitespace-nowrap">
+                        <i class="fa-solid fa-layer-group text-blue-500"></i><span>변동사항</span>
+                    </button>
+                    <div class="h-4 w-[1px] bg-gray-200 mx-1"></div>
+                    <button id="tool-photo" class="tool-btn flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors whitespace-nowrap">
+                        <i class="fa-regular fa-image text-purple-500"></i><span>원본 사진 보기</span>
+                    </button>
+                    <button id="tool-ruler" class="tool-btn flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors whitespace-nowrap">
+                        <i class="fa-solid fa-ruler-combined text-amber-500"></i><span>자</span>
+                    </button>
+                    <button id="tool-comment" class="tool-btn flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors relative whitespace-nowrap">
+                        <i class="fa-regular fa-comment-dots text-emerald-500"></i><span>찍톡</span>
+                        <span class="bg-zzikbang text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full">3</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- 3. Right Control Panel -->
+        <aside id="right-panel" class="w-80 bg-white border-l border-gray-200 flex flex-col h-full z-10 shadow-panel drawer-transition shrink-0 relative">
+
+            <!-- ============ MAIN VIEW ============ -->
+            <div id="panel-main" class="flex flex-col h-full">
+                <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-sliders text-zzikbang text-sm"></i>
+                        <h2 class="font-bold text-gray-900 text-sm">특성</h2>
+                    </div>
+                    <button id="close-right-panel" class="text-gray-400 hover:text-gray-600 p-1"><i class="fa-solid fa-xmark text-base"></i></button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-4 space-y-6">
+
+                    <!-- 3. View & section -->
+                    <div class="space-y-3">
+                        <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider flex items-center justify-between">
+                            <span>1. 뷰 생성 및 섹션 절단</span>
+                            <label class="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 normal-case tracking-normal cursor-pointer">
+                                <input type="checkbox" id="cut-on" class="accent-[#FF6B00]"> 절단 적용
+                            </label>
+                        </label>
+                        <div class="grid grid-cols-3 gap-1.5 p-1 bg-gray-100 rounded-xl text-xs font-medium">
+                            <button data-view="plan" class="seg-btn view-btn py-2 rounded-lg text-gray-600 text-center transition-all">
+                                <i class="fa-solid fa-layer-group mb-1 block text-sm"></i>평면 (Plan)
+                            </button>
+                            <button data-view="elevation" class="seg-btn view-btn py-2 rounded-lg text-gray-600 text-center transition-all">
+                                <i class="fa-solid fa-building mb-1 block text-sm"></i>입면 (Elev)
+                            </button>
+                            <button data-view="section" class="seg-btn view-btn py-2 rounded-lg text-gray-600 text-center transition-all">
+                                <i class="fa-solid fa-scissors mb-1 block text-sm"></i>단면 (Cut)
+                            </button>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200/80 space-y-3">
+                            <div>
+                                <div class="flex justify-between items-center text-xs mb-1">
+                                    <span class="font-semibold text-gray-700">뷰 높이 (Height)</span>
+                                    <div class="flex items-center space-x-1">
+                                        <input type="number" id="num-view-height" value="1.20" step="0.05" class="w-16 px-1.5 py-0.5 border border-gray-300 rounded text-right text-xs font-mono font-bold focus:border-zzikbang focus:outline-none">
+                                        <span class="text-gray-500 text-[11px]">m</span>
+                                    </div>
+                                </div>
+                                <input type="range" id="range-view-height" min="-2.0" max="8.0" step="0.01" value="1.20">
+                            </div>
+                            <div>
+                                <div class="flex justify-between items-center text-xs mb-1">
+                                    <span class="font-semibold text-gray-700">뷰 깊이 (Depth)</span>
+                                    <div class="flex items-center space-x-1">
+                                        <input type="number" id="num-view-depth" value="0.50" step="0.05" class="w-16 px-1.5 py-0.5 border border-gray-300 rounded text-right text-xs font-mono font-bold focus:border-zzikbang focus:outline-none">
+                                        <span class="text-gray-500 text-[11px]">m</span>
+                                    </div>
+                                </div>
+                                <input type="range" id="range-view-depth" min="0.05" max="3.0" step="0.01" value="0.50">
+                            </div>
+                            <p class="text-[11px] text-gray-400 leading-snug" id="view-desc">평면: 뷰 높이 위를 잘라내고 위에서 내려다봅니다.</p>
+                            <button id="btn-height-to-ref" class="btn-sub w-full"><i class="fa-solid fa-arrows-up-to-line"></i>뷰 높이 = 도면 레벨 + 1.2 m</button>
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-100">
+
+                    <!-- 2. Scan colour -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">2. 스캔 색상</label>
+                        <div class="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-lg text-[11px] font-semibold" id="scan-color-mode">
+                            <button data-mode="orig" class="py-1.5 rounded-md bg-white shadow-xs text-gray-800"><i class="fa-solid fa-palette mr-1"></i>원본</button>
+                            <button data-mode="gray" class="py-1.5 rounded-md text-gray-500"><i class="fa-solid fa-circle-half-stroke mr-1"></i>흑백</button>
+                            <button data-mode="overlap" class="py-1.5 rounded-md text-gray-500" title="BIM 표면과 겹치는 스캔 부분만 색으로, 나머지는 흑백"><i class="fa-solid fa-clone mr-1"></i>겹침</button>
+                        </div>
+                        <div id="overlap-opts" class="hidden flex items-center gap-1.5 text-[11px] text-gray-600">
+                            <span title="BIM 표면에서 이 거리 안의 스캔을 겹침으로 봅니다"><i class="fa-solid fa-ruler-horizontal mr-1"></i>허용</span>
+                            <select id="overlap-tol" class="inp" style="width:auto"><option value="0.02">2 cm</option><option value="0.05" selected>5 cm</option><option value="0.1">10 cm</option><option value="0.2">20 cm</option></select>
+                            <input type="color" id="overlap-color" value="#22c55e" class="w-7 h-6 border-0 bg-transparent p-0" title="겹침 색">
+                            <button id="overlap-run" class="btn-sub px-2 ml-auto" title="다시 계산 (정렬을 바꾼 뒤)"><i class="fa-solid fa-rotate"></i></button>
+                        </div>
+                        <p id="overlap-info" class="hidden text-[11px] text-gray-500"></p>
+                    </div>
+
+                    <!-- 3. Opacity -->
+                    <div class="space-y-4">
+                        <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">3. 레이어 투명도 조절</label>
+                        <div class="flex items-center gap-2 text-[11px] text-gray-600">
+                            <span title="스캔과 BIM이 겹칠 때 어느 쪽을 앞에 그릴지 (보는 각도와 상관없이 고정)"><i class="fa-solid fa-layer-group mr-1"></i>앞에 표시</span>
+                            <div class="grid grid-cols-2 gap-1 bg-gray-100 p-1 rounded-lg font-semibold flex-1" id="front-mode">
+                                <button data-front="scan" class="py-1 rounded-md bg-white shadow-xs text-gray-800">스캔</button>
+                                <button data-front="bim" class="py-1 rounded-md text-gray-500">BIM</button>
+                            </div>
+                        </div>
+                        <div class="bg-orange-50/40 border border-orange-100 p-3 rounded-xl space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-bold text-gray-800 flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-zzikbang mr-1.5"></span>3DGS 스캔 투명도</span>
+                                <span id="label-ply-opacity" class="text-xs font-mono font-extrabold text-zzikbang">100%</span>
+                            </div>
+                            <input type="range" id="slider-ply-opacity" min="0" max="100" value="100">
+                        </div>
+                        <div class="bg-blue-50/40 border border-blue-100 p-3 rounded-xl space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-bold text-gray-800 flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 mr-1.5"></span>도면/모델 투명도</span>
+                                <span id="label-cad-opacity" class="text-xs font-mono font-extrabold text-blue-600">80%</span>
+                            </div>
+                            <input type="range" id="slider-cad-opacity" class="blue" min="0" max="100" value="80">
+                        </div>
+                        <p class="text-[11px] text-gray-400">개별 레이어 투명도는 왼쪽 레이어 목록의 슬라이더로 조절합니다.</p>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ============ ALIGN VIEW ============ -->
+            <div id="panel-align" class="hidden flex-col h-full">
+                <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <button id="align-back" class="text-gray-400 hover:text-gray-700 p-1 -ml-1"><i class="fa-solid fa-arrow-left"></i></button>
+                        <h2 class="font-bold text-gray-900 text-sm">스캔본 & 도면 위치 정렬</h2>
+                    </div>
+                    <button id="al-lock"></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4 space-y-5">
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="block"><span class="text-[11px] font-semibold text-gray-500">스캔</span><select id="al-scan" class="inp mt-0.5"></select></label>
+                        <label class="block"><span class="text-[11px] font-semibold text-gray-500">기준 (도면/BIM)</span><select id="al-ref" class="inp mt-0.5"></select></label>
+                    </div>
+
+                    <!-- Step 1 -->
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2"><span class="step-num">1</span><span class="text-xs font-extrabold text-gray-800">바닥 · 좌표</span><i class="fa-solid fa-circle-info text-gray-300 hover:text-gray-500 ml-auto cursor-help" title="스캔에서 바닥면을 찾아 수평을 맞추고 높이 0 m에 놓습니다. 틀리면 다음 후보 평면 또는 수동 보정을 쓰세요."></i></div>
+                        <div class="flex gap-1.5">
+                            <button id="al-floor" class="btn-main flex-1"><i class="fa-solid fa-layer-group"></i>바닥 인식</button>
+                            <select id="al-floor-mode" class="inp text-[11px]" style="width:auto">
+                                <option value="scaniverse">Scaniverse</option>
+                                <option value="auto">자동</option>
+                                <option value="plane">평면 검출</option>
+                                <option value="gravity">중력 정렬</option>
+                            </select>
+                        </div>
+                        <div class="grid gap-1.5" style="grid-template-columns:repeat(6,minmax(0,1fr))">
+                            <button id="al-floor-next" class="btn-sub" title="다음 후보 평면"><i class="fa-solid fa-forward-step"></i></button>
+                            <button id="al-floor-undo" class="btn-sub" title="되돌리기"><i class="fa-solid fa-rotate-left"></i></button>
+                            <button id="al-flip" class="btn-sub" title="상하 반전"><i class="fa-solid fa-arrows-up-down"></i></button>
+                            <button id="al-zup" class="btn-sub" title="Z-up → Y-up"><i class="fa-solid fa-rotate"></i></button>
+                            <button id="al-level" class="btn-sub" title="바닥 3점 수평"><i class="fa-solid fa-ruler-horizontal"></i></button>
+                            <button id="al-scanscale" class="btn-sub" title="2점 실측 스케일"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                        </div>
+                        <p id="al-floor-info" class="hidden"></p>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="space-y-2" id="al-step-scale">
+                        <div class="flex items-center gap-2"><span class="step-num">2</span><span class="text-xs font-extrabold text-gray-800">도면 축척</span><span id="al-calib-badge" class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded"></span></div>
+                        <button id="al-calib2" class="btn-sub w-full"><i class="fa-solid fa-ruler"></i>2점 + 실제 치수</button>
+                        <div class="grid grid-cols-3 gap-1.5 items-end">
+                            <label class="block"><span class="text-[10px] text-gray-500">축척 1 :</span><input type="number" id="al-ratio" value="100" class="inp"></label>
+                            <label class="block"><span class="text-[10px] text-gray-500">해상도 DPI</span><input type="number" id="al-dpi" value="150" class="inp"></label>
+                            <button id="al-ratio-apply" class="btn-sub h-[28px]">비율 적용</button>
+                        </div>
+                        <p id="al-scale-info" class="text-[11px] text-gray-400 leading-snug"></p>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2"><span class="step-num">3</span><span class="text-xs font-extrabold text-gray-800">정합</span><i class="fa-solid fa-circle-info text-gray-300 hover:text-gray-500 ml-auto cursor-help" title="기준에 점(기둥 중심·벽 모서리 등)을 저장해 두고, 스캔에서 같은 점을 차례로 찍으면 위치·회전·스케일이 맞춰집니다. 3점 이상은 최소제곱."></i></div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="block"><span class="text-[11px] font-semibold text-gray-500"><i class="fa-solid fa-up-down-left-right mr-1"></i>대상</span>
+                                <select id="al-target" class="inp mt-0.5"><option value="scan">스캔 → 기준</option><option value="ref">기준 → 스캔</option></select></label>
+                            <label class="block"><span class="text-[11px] font-semibold text-gray-500"><i class="fa-solid fa-maximize mr-1"></i>스케일</span>
+                                <select id="al-scale" class="inp mt-0.5"><option value="1">맞춤</option><option value="0">고정</option></select></label>
+                        </div>
+                        <label id="al-level-wrap" class="hidden block"><span class="text-[11px] font-semibold text-gray-500">BIM 바닥 레벨</span>
+                            <select id="al-bimlevel" class="inp mt-0.5"></select></label>
+                        <button id="al-seat" class="btn-sub w-full"><i class="fa-solid fa-arrows-up-down"></i>바닥 높이 맞추기</button>
+                        <div id="anchor-box" class="hidden flex items-center gap-1.5 text-[10px] text-gray-500 cursor-help">
+                            <i class="fa-solid fa-anchor text-zzikbang"></i>
+                            <span id="anchor-note" class="flex-1 truncate"></span>
+                            <button id="anchor-reset" class="text-gray-300 hover:text-zzikbang" title="앵커 초기화"><i class="fa-solid fa-link-slash"></i></button>
+                        </div>
+                        <button id="al-setref" class="btn-sub w-full"><i class="fa-solid fa-location-crosshairs"></i><span id="al-setref-label">기준점 지정</span></button>
+                        <div id="al-refpts" class="space-y-1"></div>
+                        <label class="flex items-center gap-1.5 text-[11px] text-gray-500"><input type="checkbox" id="al-showref" checked class="accent-[#FF6B00]"> <i class="fa-solid fa-eye"></i> 기준점 표시</label>
+                        <button id="al-run" class="btn-main w-full"><i class="fa-solid fa-wand-magic-sparkles"></i>대응점 찍고 정합</button>
+                        <div id="al-result" class="hidden bg-zzikbang-light border border-zzikbang-border rounded-xl p-3 text-[11px] text-gray-700 space-y-1"></div>
+                        <label class="flex items-center gap-1.5 text-[11px] text-gray-500"><input type="checkbox" id="al-autorefine" checked class="accent-[#FF6B00]"> <i class="fa-solid fa-crosshairs"></i> 정합 후 벽 단면 미세 보정</label>
+
+                        <div class="pt-3 mt-1 border-t border-gray-100 space-y-2">
+                            <p class="text-[11px] font-extrabold text-gray-700"><i class="fa-solid fa-robot text-zzikbang mr-1"></i>자동 정합<i class="fa-solid fa-circle-info text-gray-300 hover:text-gray-500 ml-1 cursor-help" title="스캔을 벽 높이에서 잘라 평면도 선(또는 IFC 단면)과 가장 잘 겹치는 회전·위치를 찾습니다."></i></p>
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <button id="al-auto" class="btn-sub"><i class="fa-solid fa-wand-magic-sparkles"></i>자동 정합</button>
+                                <button id="al-refine" class="btn-sub"><i class="fa-solid fa-crosshairs"></i>미세 보정</button>
+                            </div>
+                            <button id="al-auto-next" class="btn-sub w-full hidden"><i class="fa-solid fa-forward-step"></i>다음 후보</button>
+                            <div class="flex items-center gap-1.5 text-[11px] text-gray-500">
+                                <i class="fa-solid fa-scissors" title="벽 단면 높이 (바닥 기준)"></i>
+                                <input type="number" id="al-slice0" value="0.9" step="0.1" class="inp" style="width:3.6rem">
+                                <span>~</span>
+                                <input type="number" id="al-slice1" value="1.6" step="0.1" class="inp" style="width:3.6rem">
+                                <span>m</span>
+                            </div>
+                            <div id="al-auto-result" class="hidden px-0.5 cursor-help"></div>
+                        </div>
+
+                        <div class="pt-3 mt-1 border-t border-gray-100 space-y-2">
+                            <p class="text-[11px] font-extrabold text-gray-700"><i class="fa-solid fa-location-dot text-red-600 mr-1"></i>마커<i class="fa-solid fa-circle-info text-gray-300 hover:text-gray-500 ml-1 cursor-help" title="현장의 색 마커(소화전·빨간 점)를 스캔에서 찾아, 기준점·IFC 마커·이전 스캔과 순서 상관없이 대응시켜 정렬합니다."></i></p>
+                            <div id="mk-ifc-wrap" class="hidden space-y-1.5 bg-red-50/50 border border-red-100 rounded-xl p-2.5">
+                                <label class="block"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-cube mr-1"></i>IFC 마커 객체</span>
+                                    <select id="mk-ifc-group" class="inp mt-0.5"></select></label>
+                                <button id="mk-ifc-run" class="btn-main w-full"><i class="fa-solid fa-wand-magic-sparkles"></i>IFC 마커로 정렬</button>
+                                <label class="flex items-center gap-1.5 text-[11px] text-gray-600" title="가장 멀리 떨어진 두 마커 사이 거리가 IFC와 같아지도록 스캔 배율을 맞춥니다 (스캔은 휘지 않음)"><input type="checkbox" id="mk-fit-scale" checked class="accent-[#FF6B00]"> <i class="fa-solid fa-maximize"></i> 스케일: 최외곽 마커 기준</label>
+                                <label class="block"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-satellite-dish mr-1"></i>센서 위치</span>
+                                    <select id="mk-src" class="inp mt-0.5">
+                                        <option value="scan">스캔 마커</option>
+                                        <option value="ref">모델 기준점</option>
+                                    </select></label>
+                                <button id="mk-export" class="btn-sub w-full"><i class="fa-solid fa-file-export"></i><span id="mk-export-label">IFC에 마커 추가·저장</span></button>
+                            </div>
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <label class="block"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-location-dot mr-1"></i>마커</span>
+                                    <select id="mk-color" class="inp">
+                                        <option value="0">빨강</option>
+                                        <option value="25">주황</option>
+                                        <option value="55">노랑</option>
+                                        <option value="130">초록</option>
+                                        <option value="215">파랑</option>
+                                        <option value="custom">직접 선택</option>
+                                    </select></label>
+                                <label class="block"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-sliders mr-1"></i>민감도</span>
+                                    <select id="mk-sens" class="inp">
+                                        <option value="strict">엄격</option>
+                                        <option value="normal" selected>보통</option>
+                                        <option value="loose">느슨</option>
+                                    </select></label>
+                            </div>
+                            <input type="color" id="mk-custom" value="#e01e1e" class="hidden w-full h-7 rounded border border-gray-200">
+                            <button id="mk-detect" class="btn-sub w-full"><i class="fa-solid fa-magnifying-glass"></i>마커 찾기</button>
+                            <p id="mk-info" class="text-[11px] font-semibold text-gray-500"></p>
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <button id="mk-to-ref" class="btn-sub"><i class="fa-solid fa-map-pin"></i>기준점</button>
+                                <button id="mk-to-scan" class="btn-sub"><i class="fa-solid fa-clock-rotate-left"></i>이전 스캔</button>
+                            </div>
+                            <label class="block"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-clock-rotate-left mr-1"></i>이전 공정 스캔</span><select id="mk-base" class="inp"></select></label>
+                            <div id="mk-result" class="hidden bg-red-50 border border-red-100 rounded-xl p-3 text-[11px] text-gray-700 space-y-1"></div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2"><span class="step-num">4</span><span class="text-xs font-extrabold text-gray-800">미세 조정</span><i class="fa-solid fa-circle-info text-gray-300 hover:text-gray-500 ml-auto cursor-help" title="키보드: 방향키 이동 · [ / ] 회전 · PgUp/PgDn 높이 · +/− 배율 · Shift ×10 (화면 이동 WASD · E/Q)"></i></div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="block"><span class="text-[11px] font-semibold text-gray-500"><i class="fa-solid fa-up-down-left-right mr-1"></i>대상</span>
+                                <select id="nudge-target" class="inp mt-0.5"><option value="ref">기준</option><option value="scan">스캔</option></select></label>
+                            <label class="block"><span class="text-[11px] font-semibold text-gray-500"><i class="fa-solid fa-ruler-combined mr-1"></i>단위</span>
+                                <select id="nudge-step" class="inp mt-0.5"><option value="0.005">5 mm</option><option value="0.02" selected>20 mm</option><option value="0.1">100 mm</option><option value="0.5">500 mm</option></select></label>
+                        </div>
+                        <div class="grid gap-1.5" style="grid-template-columns:repeat(5,minmax(0,1fr))">
+                            <button class="nudge" data-nudge="rot-" title="회전 −"><i class="fa-solid fa-rotate-left"></i></button>
+                            <button class="nudge" data-nudge="z-" title="앞"><i class="fa-solid fa-arrow-up"></i></button>
+                            <button class="nudge" data-nudge="rot+" title="회전 +"><i class="fa-solid fa-rotate-right"></i></button>
+                            <button class="nudge" data-nudge="y+" title="높이 +"><i class="fa-solid fa-angles-up"></i></button>
+                            <button class="nudge" data-nudge="s+" title="배율 +"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                            <button class="nudge" data-nudge="x-" title="좌"><i class="fa-solid fa-arrow-left"></i></button>
+                            <button class="nudge" data-nudge="z+" title="뒤"><i class="fa-solid fa-arrow-down"></i></button>
+                            <button class="nudge" data-nudge="x+" title="우"><i class="fa-solid fa-arrow-right"></i></button>
+                            <button class="nudge" data-nudge="y-" title="높이 −"><i class="fa-solid fa-angles-down"></i></button>
+                            <button class="nudge" data-nudge="s-" title="배율 −"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-1.5" id="xform-box">
+                            <label class="block"><span class="text-[10px] text-gray-500">X (m)</span><input type="number" step="0.01" id="xf-x" class="inp"></label>
+                            <label class="block"><span class="text-[10px] text-gray-500">Z (m)</span><input type="number" step="0.01" id="xf-z" class="inp"></label>
+                            <label class="block"><span class="text-[10px] text-gray-500">Y 높이 (m)</span><input type="number" step="0.01" id="xf-y" class="inp"></label>
+                            <label class="block"><span class="text-[10px] text-gray-500">회전 (°)</span><input type="number" step="0.1" id="xf-rot" class="inp"></label>
+                        </div>
+                        <p id="fixed-note" class="hidden text-[11px] text-gray-400"><i class="fa-solid fa-lock mr-1"></i>2D 도면 고정 · 스캔만 이동</p>
+                    </div>
+
+                    <!-- Step 5: scan -> IFC -->
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2"><span class="step-num">5</span><span class="text-xs font-extrabold text-gray-800">Scan-to-BIM</span><i class="fa-solid fa-circle-info text-gray-300 hover:text-gray-500 ml-auto cursor-help" title="스캔으로 벽·슬래브·마커가 든 IFC4 파일을 만듭니다. 스캔과 정확히 겹쳐 다음 공정의 기준으로 쓸 수 있습니다."></i></div>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <label class="block"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-gears mr-1"></i>방식</span>
+                                <select id="sb-method" class="inp">
+                                    <option value="voxel-height">블록 · 높이맵</option>
+                                    <option value="voxel-plan">블록 · 벽 경계</option>
+                                    <option value="voxel-3d">블록 · 3D</option>
+                                    <option value="faces">벽면 검출</option>
+                                </select></label>
+                            <label class="block" id="sb-size-wrap"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-cubes mr-1"></i>블록</span>
+                                <select id="sb-size" class="inp">
+                                    <option value="0.1">10 cm</option>
+                                    <option value="0.2" selected>20 cm</option>
+                                    <option value="0.3">30 cm</option>
+                                    <option value="0.5">50 cm</option>
+                                </select></label>
+                        </div>
+                        <p id="sb-method-desc" class="hidden"></p>
+                        <div class="grid grid-cols-2 gap-1.5 items-end" id="sb-face-opts">
+                            <label class="block"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-grip-lines-vertical mr-1"></i>벽 두께 (m)</span><input type="number" id="sb-thick" value="0.2" step="0.05" class="inp"></label>
+                            <div class="space-y-1 pb-0.5">
+                                <label class="flex items-center gap-1.5 text-[11px] text-gray-600"><input type="checkbox" id="sb-conservative" checked class="accent-[#FF6B00]"> 보수적 (벽 최소화)</label>
+                                <label class="flex items-center gap-1.5 text-[11px] text-gray-600"><input type="checkbox" id="sb-ortho" checked class="accent-[#FF6B00]"> 직각 보정</label>
+                                <label class="flex items-center gap-1.5 text-[11px] text-gray-600"><input type="checkbox" id="sb-markers" checked class="accent-[#FF6B00]"> 스캔 마커 포함</label>
+                            </div>
+                        </div>
+                        <button id="sb-run" class="btn-main w-full"><i class="fa-solid fa-building"></i>IFC 생성</button>
+                        <button id="sb-save" class="btn-sub w-full hidden"><i class="fa-solid fa-floppy-disk"></i>저장</button>
+                        <div id="sb-result" class="hidden bg-blue-50 border border-blue-100 rounded-xl p-3 text-[11px] text-gray-700 space-y-1"></div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Drawing point picker modal -->
+    <div id="modal-pick" class="hidden fixed inset-0 bg-black/50 z-40 items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-floating w-full max-w-6xl h-full max-h-[880px] flex flex-col overflow-hidden">
+            <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+                <i class="fa-solid fa-location-crosshairs text-zzikbang"></i>
+                <div class="min-w-0">
+                    <p class="text-sm font-bold text-gray-900" id="mp-title"></p>
+                    <p class="text-[11px] text-gray-500 truncate" id="mp-sub"></p>
+                </div>
+                <span class="ml-auto font-mono text-xs font-bold text-zzikbang" id="mp-count"></span>
+            </div>
+            <div class="flex-1 relative bg-gray-500 overflow-hidden cursor-crosshair" id="mp-wrap">
+                <canvas id="mp-canvas" class="absolute inset-0 w-full h-full"></canvas>
+                <canvas id="mp-lens" width="150" height="150" class="hidden absolute pointer-events-none rounded-full border-2 border-white shadow-lg"></canvas>
+            </div>
+            <div class="px-5 py-3 border-t border-gray-100 flex items-center gap-2 flex-wrap">
+                <label class="flex items-center gap-1.5 text-xs font-bold text-gray-700 cursor-pointer"><input type="checkbox" id="mp-snap" checked class="accent-[#16a34a]"> 스냅</label>
+                <span class="text-[11px] text-gray-400">끝점·코너에 자동으로 붙음 (Alt: 잠시 끄기) · 휠: 확대/축소 · 드래그: 이동 · Shift: 수평/수직 고정</span>
+                <span class="flex-1"></span>
+                <label id="mp-len-wrap" class="flex items-center gap-1.5 text-xs font-semibold text-gray-700">실제 치수 <input type="number" id="mp-len" class="inp w-28" placeholder="예: 10000"> mm</label>
+                <button id="mp-undo" class="btn-sub px-3">되돌리기</button>
+                <button id="mp-cancel" class="btn-sub px-3">취소</button>
+                <button id="mp-ok" class="btn-main px-5" disabled>확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic dialog -->
+    <div id="modal-ask" class="hidden fixed inset-0 bg-black/40 z-50 items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-floating w-full max-w-sm p-5 space-y-3">
+            <p class="text-sm font-bold text-gray-900" id="ask-title"></p>
+            <p class="text-xs text-gray-500 whitespace-pre-line leading-relaxed" id="ask-body"></p>
+            <div id="ask-fields" class="space-y-2"></div>
+            <div class="flex justify-end gap-2 pt-1">
+                <button id="ask-cancel" class="btn-sub px-4">취소</button>
+                <button id="ask-ok" class="btn-main px-5">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+</body>
+</html>
