@@ -1424,6 +1424,10 @@ function renderAlign() {
       : "<option>수평면을 찾지 못함 (모델 최저점 사용)</option>";
   }
   $("mk-ifc-wrap").classList.toggle("hidden", rr?.type !== "bim");
+  const dwgMarks = rr?.type === "drawing" && rr.refPts.length >= 2 && rr.refPts.every((p) => p.marker);
+  $("mk-dwg-wrap").classList.toggle("hidden", !(rr?.type === "drawing" && rr.orient === "plan"));
+  $("mk-dwg-label").textContent = dwgMarks ? `도면 마커 ${rr.refPts.length}개로 자동 정렬` : "도면에 마커 찍고 자동 정렬";
+  $("mk-dwg-repick").classList.toggle("hidden", !dwgMarks);
   $("mk-export-label").textContent = rr?.type === "bim" && rr.kind !== "ifc" ? "IFC 변환·센서 저장" : "IFC에 마커 추가·저장";
   if (rr?.type === "bim") {
     // name-confirmed marker groups first, then objects found by the marker colour, then the rest
@@ -2008,6 +2012,93 @@ async function markersToRef({ fitScale = false } = {}) {
   // wall-slice refinement would pull the markers apart again
   if (!fitScale && $("al-autorefine").checked && autoSupported(r)) await runRefine();
 }
+// ---- 2D drawing markers: mark 2+ marker positions on the plan once; the scan's colour markers are matched to
+// them in any order. With only two markers the pairing (and a 180° flip) is ambiguous, so every candidate
+// is scored against the drawing's wall lines and the best one wins.
+async function pickDrawingMarkers(r) {
+  const res = await pickOnDrawing(r, {
+    title: "도면에 마커 위치 지정", min: 2, max: Infinity, labels: [],
+    sub: "현장 마커(빨간 점·소화전 등)가 있는 위치를 도면에서 2개 이상 클릭 후 확인. 서로 멀리 떨어진 마커일수록 정확합니다.",
+  });
+  if (!res) return false;
+  r.refPts = res.pts.map((p, i) => ({ label: `마커 ${i + 1}`, px: p.x, py: p.y, marker: true }));
+  rebuildPins(r);
+  renderRefPts();
+  renderAlign();
+  return true;
+}
+function wallScore(field, S, M) {
+  // share of scan wall-slice points that land on drawing lines after moving the scan by M
+  const e = M.elements, step = Math.max(1, Math.floor(S.length / 2 / 1500));
+  let n = 0, hit = 0;
+  for (let i = 0; i < S.length; i += 2 * step) {
+    const x = S[i], z = S[i + 1];
+    const wx = e[0] * x + e[8] * z + e[12], wz = e[2] * x + e[10] * z + e[14];
+    n++;
+    if (field.dist(wx, wz) < 0.08) hit++;
+  }
+  return n ? hit / n : 0;
+}
+async function alignDrawingMarkers() {
+  const s = state.activeScan, r = state.activeRef;
+  if (!s || r?.type !== "drawing") return toast("스캔과 2D 도면이 모두 필요합니다");
+  if (blockedByLock(s, r)) return;
+  if (!(r.refPts.length >= 2 && r.refPts.every((p) => p.marker)) && !(await pickDrawingMarkers(r))) return;
+  loader(true, "스캔에서 마커를 찾고 도면 마커에 맞추는 중...");
+  await nextFrame();
+  try {
+    if (!s.markers?.length) { findMarkers(s); renderAll(); }
+    if (s.markers.length < 2) throw new Error("스캔에서 마커를 2개 이상 찾지 못했습니다 — 마커 색·민감도를 바꿔 보세요");
+    const withScale = $("mk-dwg-scale").checked || !(r.calibrated && s.metric);
+    const src = s.markers.slice(0, 12).map((m) => markerWorld(s, m));
+    const dst = r.refPts.map((p) => refPointWorld(r, p));
+    const flat = (v) => new THREE.Vector3(v.x, 0, v.z);
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+    let cands = [];
+    if (dst.length >= 3) {
+      const res = matchMarkers(src, dst, solveYawSimilarity, { withScale, planar: true, tol: markerTol(s) });
+      if (res) cands.push(res);
+    }
+    if (!cands.length) {
+      // every ordered pair of scan markers onto the two outermost drawing markers
+      let i0 = 0, j0 = 1, dmax = 0;
+      for (let i = 0; i < dst.length; i++) for (let j = i + 1; j < dst.length; j++) if (dist(dst[i], dst[j]) > dmax) { dmax = dist(dst[i], dst[j]); i0 = i; j0 = j; }
+      for (let a = 0; a < src.length; a++) for (let b = 0; b < src.length; b++) {
+        if (a === b) continue;
+        const ds = dist(src[a], src[b]);
+        if (ds < 1e-6) continue;
+        const k = dmax / ds;
+        if (!withScale ? Math.abs(dmax - ds) > Math.max(markerTol(s), 0.05 * dmax) : k < 0.2 || k > 5) continue;
+        const fit = solveYawSimilarity([flat(src[a]), flat(src[b])], [flat(dst[i0]), flat(dst[j0])], { withScale, planar: true });
+        cands.push({ ...fit, pairs: [[a, i0], [b, j0]] });
+      }
+    }
+    if (!cands.length) throw new Error("스캔 마커와 도면 마커의 간격이 맞는 조합이 없습니다 — 도면 축척이나 마커 위치를 확인하세요");
+    // pick by the drawing's wall lines (a two-marker fit alone cannot tell A↔B from B↔A)
+    let best = cands[0];
+    if (cands.length > 1) {
+      const field = drawingField(r);
+      const { S } = scanSlice(s);
+      for (const c of cands) c.walls = S.length ? wallScore(field, S, c.M) : 0;
+      cands.sort((p, q) => q.walls - p.walls || p.rms - q.rms);
+      best = cands[0];
+    }
+    moveScanWith(s, best.M, r); // the drawing stays put, the scan moves
+    seatFloor(s, r, true);
+    s.aligned = true;
+    linkRef(s, r);
+    updateXform();
+    fitView();
+    toast(`도면 마커 ${best.pairs.length}개로 정렬했습니다 — 회전 ${(best.theta / DEG).toFixed(1)}°${withScale ? ` · 배율 ×${best.s.toFixed(4)}` : ""}${best.walls != null ? ` · 벽 일치 ${Math.round(best.walls * 100)}%` : ""}`, 5000);
+  } catch (e) {
+    toast(e.message || String(e), 6000);
+  } finally {
+    loader(false);
+  }
+}
+$("mk-dwg-run").onclick = () => alignDrawingMarkers();
+$("mk-dwg-repick").onclick = async () => { const r = state.activeRef; if (r?.type === "drawing" && (await pickDrawingMarkers(r))) alignDrawingMarkers(); };
+
 // IFC marker objects -> reference points, then the same order-free marker matching
 $("mk-ifc-run").onclick = async () => {
   const s = state.activeScan, r = state.activeRef;

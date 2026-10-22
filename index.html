@@ -520,6 +520,11 @@
 
                         <div class="pt-3 mt-1 border-t border-gray-100 space-y-2">
                             <p class="text-[11px] font-extrabold text-gray-700"><i class="fa-solid fa-location-dot text-red-600 mr-1"></i>마커<i class="fa-solid fa-circle-info text-gray-300 hover:text-gray-500 ml-1 cursor-help" title="현장의 색 마커(소화전·빨간 점)를 스캔에서 찾아, 기준점·IFC 마커·이전 스캔과 순서 상관없이 대응시켜 정렬합니다."></i></p>
+                            <div id="mk-dwg-wrap" class="hidden space-y-1.5 bg-orange-50/60 border border-orange-100 rounded-xl p-2.5">
+                                <button id="mk-dwg-run" class="btn-main w-full"><i class="fa-solid fa-location-crosshairs"></i><span id="mk-dwg-label">도면에 마커 찍고 자동 정렬</span></button>
+                                <label class="flex items-center gap-1.5 text-[11px] text-gray-600" title="가장 멀리 떨어진 두 마커 사이 거리가 도면과 같아지도록 스캔 배율을 맞춥니다"><input type="checkbox" id="mk-dwg-scale" checked class="accent-[#FF6B00]"> <i class="fa-solid fa-maximize"></i> 스케일: 최외곽 마커 기준</label>
+                                <button id="mk-dwg-repick" class="hidden text-[10px] text-gray-400 hover:text-zzikbang"><i class="fa-solid fa-rotate-left mr-1"></i>마커 위치 다시 찍기</button>
+                            </div>
                             <div id="mk-ifc-wrap" class="hidden space-y-1.5 bg-red-50/50 border border-red-100 rounded-xl p-2.5">
                                 <label class="block"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-cube mr-1"></i>IFC 마커 객체</span>
                                     <select id="mk-ifc-group" class="inp mt-0.5"></select></label>
