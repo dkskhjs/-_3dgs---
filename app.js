@@ -2862,7 +2862,7 @@ function renderDimCard() {
   const card = $("dim-card");
   card.classList.remove("hidden");
   card.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid fa-ruler-combined text-amber-500"></i><span class="font-extrabold text-gray-900 text-xs flex-1">자</span>
-      <label class="flex items-center gap-1 text-[10px] text-gray-500" title="도면·BIM 객체(벽체·매스) 외곽선의 꼭짓점·모서리에 스냅"><input id="dim-snap" type="checkbox" ${dim.snap ? "checked" : ""} class="accent-[#f59e0b]"><i class="fa-solid fa-magnet"></i>스냅</label>
+      <label class="flex items-center gap-1 text-[10px] text-gray-500" title="도면·BIM 객체(벽체·매스) 외곽선의 꼭짓점·모서리에 스냅 (F3)"><input id="dim-snap" type="checkbox" ${dim.snap ? "checked" : ""} class="accent-[#f59e0b]"><i class="fa-solid fa-magnet"></i>스냅 F3</label>
       <label class="flex items-center gap-1 text-[10px] text-gray-500" title="첫 점을 찍은 뒤 스냅한 객체의 X(빨강)·Z(초록) 방향이나 수직 Y(파랑)으로만 (F8)"><input id="dim-ortho" type="checkbox" ${dim.ortho ? "checked" : ""} class="accent-[#f59e0b]">직교 F8</label>
       <button id="dim-clear" class="text-gray-300 hover:text-red-500 px-1" title="측정 모두 지우기"><i class="fa-solid fa-trash-can"></i></button>
       <button id="dim-close" class="text-gray-300 hover:text-gray-600 px-1" title="닫기"><i class="fa-solid fa-xmark"></i></button></div>
@@ -2875,6 +2875,7 @@ function renderDimCard() {
 }
 window.addEventListener("keydown", (e) => {
   if (!dim.on) return;
+  if (e.key === "F3") { e.preventDefault(); dim.snap = !dim.snap; renderDimCard(); return toast(`스냅 ${dim.snap ? "켜짐" : "꺼짐"} (F3)`, 1200); }
   if (e.key === "F8") { e.preventDefault(); dim.ortho = !dim.ortho; renderDimCard(); return toast(`직교 ${dim.ortho ? "켜짐" : "꺼짐"} (F8)`, 1200); }
   if (e.key === "Escape") setDimMode(false); // leaves ruler mode (and drops a measurement in progress)
 });
