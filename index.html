@@ -464,7 +464,7 @@
                     <!-- Step 3 -->
                     <div class="space-y-2">
                         <div class="flex items-center gap-2"><span class="step-num">3</span><span class="text-xs font-extrabold text-gray-800">정합</span><i class="fa-solid fa-circle-info text-gray-300 hover:text-gray-500 ml-auto cursor-help" title="기준에 점(기둥 중심·벽 모서리 등)을 저장해 두고, 스캔에서 같은 점을 차례로 찍으면 위치·회전·스케일이 맞춰집니다. 3점 이상은 최소제곱."></i></div>
-                        <div class="grid grid-cols-2 gap-2">
+                        <div id="al-opts" class="hidden grid grid-cols-2 gap-2"><!-- what moves / scale: decided automatically (anchor, metric scan) -->
                             <label class="block"><span class="text-[11px] font-semibold text-gray-500"><i class="fa-solid fa-up-down-left-right mr-1"></i>대상</span>
                                 <select id="al-target" class="inp mt-0.5"><option value="scan">스캔 → 기준</option><option value="ref">기준 → 스캔</option></select></label>
                             <label class="block"><span class="text-[11px] font-semibold text-gray-500"><i class="fa-solid fa-maximize mr-1"></i>스케일</span>

@@ -1407,6 +1407,7 @@ function renderAlign() {
   if (forced) { $("al-target").value = forced; $("nudge-target").value = forced; }
   $("al-target").disabled = !!forced;
   $("nudge-target").disabled = !!forced;
+  syncSegs();
   $("anchor-box").classList.toggle("hidden", !anchor);
   if (anchor) {
     $("anchor-note").textContent = anchor === rr ? `앵커 · ${anchor.name}` : `앵커 · ${anchor.name} → 이 기준이 이동`;
@@ -1669,6 +1670,38 @@ function solveYawSimilarity(P, Q, { withScale, planar }) {
   return { M, s, theta, residuals, rms: Math.sqrt(residuals.reduce((a, r) => a + r * r, 0) / n) };
 }
 
+// two-choice selects shown as compact toggle buttons; the hidden <select> stays the source of truth
+var SEGS = ["al-target", "al-scale", "nudge-target"]; // var: renderAlign may run before this line
+for (const id of SEGS) {
+  const sel = $(id);
+  const seg = document.createElement("div");
+  seg.id = id + "-seg";
+  seg.className = "grid grid-cols-2 gap-0.5 bg-gray-100 p-0.5 rounded-md text-[11px] font-semibold mt-0.5";
+  for (const o of sel.options) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.v = o.value;
+    b.textContent = o.textContent;
+    b.className = "py-1 rounded";
+    b.onclick = () => { if (sel.disabled || sel.value === o.value) return; sel.value = o.value; sel.dispatchEvent(new Event("change")); syncSegs(); };
+    seg.appendChild(b);
+  }
+  sel.classList.add("hidden");
+  sel.after(seg);
+}
+function syncSegs() {
+  for (const id of SEGS || []) {
+    const sel = $(id), seg = $(id + "-seg");
+    if (!seg) continue;
+    for (const b of seg.children) {
+      const on = b.dataset.v === sel.value;
+      b.classList.toggle("bg-white", on); b.classList.toggle("shadow-xs", on); b.classList.toggle("text-gray-800", on); b.classList.toggle("text-gray-400", !on);
+      b.disabled = sel.disabled;
+      b.classList.toggle("cursor-not-allowed", sel.disabled);
+    }
+  }
+}
+syncSegs();
 // align steps fold by clicking their header (all start folded)
 document.querySelectorAll("#panel-align .step-num").forEach((num) => {
   const head = num.parentElement, step = head.parentElement;
