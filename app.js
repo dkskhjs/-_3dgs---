@@ -2547,7 +2547,7 @@ renderAll();
 // Ruler ("자"): click two points to measure. On IFC / model surfaces the cursor snaps to the object's
 // outline: corners first, then the nearest point on an outline edge (feature edges > 25°).
 // =====================================================================
-const dim = { on: false, group: new THREE.Group(), a: null, list: [], snap: true };
+const dim = { on: false, group: new THREE.Group(), a: null, list: [], snap: true, ortho: true };
 scene.add(dim.group);
 const mm = (v) => `${Math.round(v * 1000).toLocaleString()}`;
 const snapMark = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: 0xf59e0b, depthTest: false }));
@@ -2563,6 +2563,7 @@ function setDimMode(on) {
   dim.a = null;
   snapMark.visible = false;
   elemLine.visible = false;
+  showLive(null);
   if (on) {
     renderDimCard();
     toast("자: 두 점을 클릭해 거리를 잽니다 (도면·BIM 객체 외곽선에 스냅)", 3500);
@@ -2676,6 +2677,48 @@ function rulerPoint(ev) {
   return { p: hit.point.clone(), kind: "surface" };
 }
 const SNAP_COLOR = { vertex: 0xef4444, edge: 0xf59e0b, surface: 0xffffff, scan: 0x22c55e };
+// ortho (like CAD F8), only while the first point is down: the second point is held level with the
+// floor (same height as A) or plumb (straight above / below A), whichever the mouse direction is closer to
+function toScreen(v) {
+  const rc = canvas.getBoundingClientRect(), q = v.clone().project(camera);
+  return new THREE.Vector2((q.x + 1) / 2 * rc.width + rc.left, (1 - q.y) / 2 * rc.height + rc.top);
+}
+function rulerTarget(ev) {
+  const r = rulerPoint(ev);
+  if (!dim.a || !dim.ortho) return r && { ...r, mode: null };
+  const A = dim.a, sA = toScreen(A);
+  const up = toScreen(A.clone().add(new THREE.Vector3(0, 1, 0))).sub(sA).normalize();
+  const m = new THREE.Vector2(ev.clientX, ev.clientY).sub(sA);
+  const vertical = m.length() > 4 && Math.abs(m.clone().normalize().dot(up)) > Math.cos(35 * DEG);
+  rayFrom(ev);
+  let p;
+  if (vertical) {
+    // a snapped point gives the height; otherwise the point on the plumb line nearest to the cursor ray
+    if (r && r.kind !== "surface" && r.kind !== "scan") p = new THREE.Vector3(A.x, r.p.y, A.z);
+    else {
+      const q = new THREE.Vector3();
+      raycaster.ray.distanceSqToSegment(A.clone().add(new THREE.Vector3(0, -1000, 0)), A.clone().add(new THREE.Vector3(0, 1000, 0)), null, q);
+      p = q;
+    }
+  } else if (r && r.kind !== "surface" && r.kind !== "scan") p = new THREE.Vector3(r.p.x, A.y, r.p.z);
+  else {
+    p = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -A.y), p)) p = r ? new THREE.Vector3(r.p.x, A.y, r.p.z) : null;
+  }
+  return p && { p, kind: r?.kind ?? "surface", mode: vertical ? "v" : "h" };
+}
+const liveLabel = new THREE.Object3D();
+liveLabel.add(label("", "dim3d"));
+liveLabel.visible = false;
+scene.add(liveLabel);
+function showLive(a, b, mode) {
+  liveLabel.visible = !!(a && b);
+  if (!liveLabel.visible) { liveLabel.children[0].element.style.display = "none"; return; }
+  liveLabel.position.copy(a).add(b).multiplyScalar(0.5);
+  const el = liveLabel.children[0].element;
+  el.style.display = "";
+  el.textContent = `${mode === "v" ? "↕ " : mode === "h" ? "↔ " : ""}${mm(a.distanceTo(b))}`;
+}
 let hoverQueued = null;
 canvas.addEventListener("pointermove", (e) => {
   if (!dim.on || pick || e.buttons) return;
@@ -2683,16 +2726,16 @@ canvas.addEventListener("pointermove", (e) => {
   hoverQueued = e;
   requestAnimationFrame(() => {
     const ev = hoverQueued; hoverQueued = null;
-    const r = rulerPoint(ev);
+    const r = rulerTarget(ev);
     snapMark.visible = !!r;
-    if (!r) { elemLine.visible = false; return; }
+    if (!r) { elemLine.visible = false; showLive(null); return; }
     snapMark.position.copy(r.p);
     snapMark.material.color.setHex(SNAP_COLOR[r.kind]);
-    if (dim.a) dim.rubber.geometry.setFromPoints([dim.a, r.p]);
+    if (dim.a) { dim.rubber.geometry.setFromPoints([dim.a, r.p]); showLive(dim.a, r.p, r.mode); }
   });
 });
 function rulerClick(ev) {
-  const r = rulerPoint(ev);
+  const r = rulerTarget(ev);
   if (!r) return toast("스캔이나 모델 위를 클릭하세요", 2000);
   if (!dim.a) {
     dim.a = r.p.clone();
@@ -2706,6 +2749,7 @@ function rulerClick(ev) {
   const a = dim.a, b = r.p.clone();
   dim.group.remove(dim.rubber);
   dim.a = null;
+  showLive(null);
   const g = new THREE.Group();
   const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: 0xf59e0b, depthTest: false }));
   line.renderOrder = 902;
@@ -2731,6 +2775,7 @@ function renderDimCard() {
   card.classList.remove("hidden");
   card.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid fa-ruler-combined text-amber-500"></i><span class="font-extrabold text-gray-900 text-xs flex-1">자</span>
       <label class="flex items-center gap-1 text-[10px] text-gray-500" title="도면·BIM 객체(벽체·매스) 외곽선의 꼭짓점·모서리에 스냅"><input id="dim-snap" type="checkbox" ${dim.snap ? "checked" : ""} class="accent-[#f59e0b]"><i class="fa-solid fa-magnet"></i>스냅</label>
+      <label class="flex items-center gap-1 text-[10px] text-gray-500" title="첫 점을 찍은 뒤 바닥 기준 수평/수직으로만 (F8)"><input id="dim-ortho" type="checkbox" ${dim.ortho ? "checked" : ""} class="accent-[#f59e0b]">직교 F8</label>
       <button id="dim-clear" class="text-gray-300 hover:text-red-500 px-1" title="측정 모두 지우기"><i class="fa-solid fa-trash-can"></i></button>
       <button id="dim-close" class="text-gray-300 hover:text-gray-600 px-1" title="닫기"><i class="fa-solid fa-xmark"></i></button></div>
     ${dim.list.length ? `<div class="mt-2 space-y-0.5">${dim.list.map((m, i) => `<div class="flex items-baseline gap-1.5"><span class="text-[10px] text-gray-400 w-3">${i + 1}</span><b class="font-mono text-gray-900">${mm(m.d)} mm</b><span class="text-[10px] text-gray-400 truncate">수평 ${mm(m.h)} · 높이 ${mm(m.v)}</span></div>`).join("")}</div>` : ""}
@@ -2738,11 +2783,15 @@ function renderDimCard() {
   $("dim-close").onclick = () => setDimMode(false);
   $("dim-clear").onclick = () => { clearDim(); renderDimCard(); };
   $("dim-snap").onchange = (e) => { dim.snap = e.target.checked; };
+  $("dim-ortho").onchange = (e) => { dim.ortho = e.target.checked; };
 }
 window.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape" || !dim.on || !dim.a) return;
+  if (!dim.on) return;
+  if (e.key === "F8") { e.preventDefault(); dim.ortho = !dim.ortho; renderDimCard(); return toast(`직교 ${dim.ortho ? "켜짐" : "꺼짐"} (F8)`, 1200); }
+  if (e.key !== "Escape" || !dim.a) return;
   dim.group.remove(dim.aDot, dim.rubber);
   dim.a = null;
+  showLive(null);
 });
 
 $("btn-land").onclick = async () => {
