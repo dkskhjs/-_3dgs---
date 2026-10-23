@@ -520,30 +520,6 @@
 
                         <div class="pt-3 mt-1 border-t border-gray-100 space-y-2">
                             <p class="text-[11px] font-extrabold text-gray-700"><i class="fa-solid fa-location-dot text-red-600 mr-1"></i>마커 정합</p>
-                            <!-- reference side: where the markers are on the drawing / in the BIM -->
-                            <div class="rounded-xl border border-blue-100 bg-blue-50/40 p-2.5 space-y-1.5">
-                                <p class="text-[10px] font-extrabold text-blue-700 flex items-center gap-1"><i class="fa-solid fa-cubes"></i>기준 마커 <span class="font-semibold text-blue-400">BIM · 도면</span></p>
-                                <div id="mk-dwg-wrap" class="hidden space-y-1.5">
-                                    <button id="mk-dwg-run" class="btn-main w-full"><i class="fa-solid fa-location-crosshairs"></i><span id="mk-dwg-label">도면에 마커 찍고 자동 정렬</span></button>
-                                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600" title="가장 멀리 떨어진 두 마커 사이 거리가 도면과 같아지도록 스캔 배율을 맞춥니다"><input type="checkbox" id="mk-dwg-scale" checked class="accent-[#FF6B00]"> <i class="fa-solid fa-maximize"></i> 스케일: 최외곽 마커 기준</label>
-                                    <button id="mk-dwg-repick" class="hidden text-[10px] text-gray-400 hover:text-zzikbang"><i class="fa-solid fa-rotate-left mr-1"></i>마커 위치 다시 찍기</button>
-                                </div>
-                                <div id="mk-ifc-wrap" class="hidden space-y-1.5">
-                                    <label class="block"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-cube mr-1"></i>IFC 마커 객체</span>
-                                        <select id="mk-ifc-group" class="inp mt-0.5"></select></label>
-                                    <button id="mk-ifc-run" class="btn-main w-full"><i class="fa-solid fa-wand-magic-sparkles"></i>IFC 마커로 정렬</button>
-                                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600" title="가장 멀리 떨어진 두 마커 사이 거리가 IFC와 같아지도록 스캔 배율을 맞춥니다 (스캔은 휘지 않음)"><input type="checkbox" id="mk-fit-scale" checked class="accent-[#FF6B00]"> <i class="fa-solid fa-maximize"></i> 스케일: 최외곽 마커 기준</label>
-                                    <div class="flex items-end gap-1.5">
-                                        <label class="block flex-1"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-satellite-dish mr-1"></i>센서 위치</span>
-                                            <select id="mk-src" class="inp mt-0.5">
-                                                <option value="scan">스캔 마커</option>
-                                                <option value="ref">모델 기준점</option>
-                                            </select></label>
-                                        <button id="mk-export" class="btn-sub px-2" title="IFC에 마커 추가·저장"><i class="fa-solid fa-file-export"></i><span id="mk-export-label" class="hidden">IFC에 마커 추가·저장</span></button>
-                                    </div>
-                                </div>
-                                <button id="mk-to-ref" class="btn-sub w-full" title="스캔 마커를 '기준점 지정'으로 찍은 점에 순서 상관없이 맞춤"><i class="fa-solid fa-map-pin"></i>기준점에 맞추기</button>
-                            </div>
                             <!-- scan side: colour markers found in the 3DGS scan -->
                             <div class="rounded-xl border border-orange-100 bg-orange-50/40 p-2.5 space-y-1.5">
                                 <p class="text-[10px] font-extrabold text-zzikbang flex items-center gap-1"><i class="fa-solid fa-cube"></i>스캔 마커 <span class="font-semibold text-orange-300">3DGS</span></p>
@@ -571,6 +547,30 @@
                                     <label class="block flex-1"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-clock-rotate-left mr-1"></i>이전 공정 스캔</span><select id="mk-base" class="inp"></select></label>
                                     <button id="mk-to-scan" class="btn-sub px-2" title="이전 공정 스캔의 마커에 맞추기"><i class="fa-solid fa-link"></i>맞추기</button>
                                 </div>
+                            </div>
+                            <!-- reference side: where the markers are on the drawing / in the BIM -->
+                            <div class="rounded-xl border border-blue-100 bg-blue-50/40 p-2.5 space-y-1.5">
+                                <p class="text-[10px] font-extrabold text-blue-700 flex items-center gap-1"><i class="fa-solid fa-cubes"></i>기준 마커 <span class="font-semibold text-blue-400">BIM · 도면</span></p>
+                                <div id="mk-dwg-wrap" class="hidden space-y-1.5">
+                                    <button id="mk-dwg-run" class="btn-main w-full"><i class="fa-solid fa-location-crosshairs"></i><span id="mk-dwg-label">도면에 마커 찍고 자동 정렬</span></button>
+                                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600" title="가장 멀리 떨어진 두 마커 사이 거리가 도면과 같아지도록 스캔 배율을 맞춥니다"><input type="checkbox" id="mk-dwg-scale" checked class="accent-[#FF6B00]"> <i class="fa-solid fa-maximize"></i> 스케일: 최외곽 마커 기준</label>
+                                    <button id="mk-dwg-repick" class="hidden text-[10px] text-gray-400 hover:text-zzikbang"><i class="fa-solid fa-rotate-left mr-1"></i>마커 위치 다시 찍기</button>
+                                </div>
+                                <div id="mk-ifc-wrap" class="hidden space-y-1.5">
+                                    <label class="block"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-cube mr-1"></i>IFC 마커 객체</span>
+                                        <select id="mk-ifc-group" class="inp mt-0.5"></select></label>
+                                    <button id="mk-ifc-run" class="btn-main w-full"><i class="fa-solid fa-wand-magic-sparkles"></i>IFC 마커로 정렬</button>
+                                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600" title="가장 멀리 떨어진 두 마커 사이 거리가 IFC와 같아지도록 스캔 배율을 맞춥니다 (스캔은 휘지 않음)"><input type="checkbox" id="mk-fit-scale" checked class="accent-[#FF6B00]"> <i class="fa-solid fa-maximize"></i> 스케일: 최외곽 마커 기준</label>
+                                    <div class="flex items-end gap-1.5">
+                                        <label class="block flex-1"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-satellite-dish mr-1"></i>센서 위치</span>
+                                            <select id="mk-src" class="inp mt-0.5">
+                                                <option value="scan">스캔 마커</option>
+                                                <option value="ref">모델 기준점</option>
+                                            </select></label>
+                                        <button id="mk-export" class="btn-sub px-2" title="IFC에 마커 추가·저장"><i class="fa-solid fa-file-export"></i><span id="mk-export-label" class="hidden">IFC에 마커 추가·저장</span></button>
+                                    </div>
+                                </div>
+                                <button id="mk-to-ref" class="btn-sub w-full" title="스캔 마커를 '기준점 지정'으로 찍은 점에 순서 상관없이 맞춤"><i class="fa-solid fa-map-pin"></i>기준점에 맞추기</button>
                             </div>
                             <div id="mk-result" class="hidden"></div>
                         </div>
