@@ -1378,9 +1378,20 @@ $("al-ref").addEventListener("change", (e) => { state.activeRef = state.refs.fin
 
 let lastAlignScanId = null;
 function renderAlign() {
+  // title = the files being aligned, so switching drawing / BIM is obvious
+  {
+    const sc = state.activeScan, rf = state.activeRef;
+    const tag = !rf ? "" : rf.type === "bim"
+      ? `<span class="text-[9px] font-extrabold px-1 rounded bg-emerald-50 text-emerald-600 mr-1">BIM</span>`
+      : `<span class="text-[9px] font-extrabold px-1 rounded bg-blue-50 text-blue-600 mr-1">도면</span>`;
+    $("al-title").innerHTML = sc || rf
+      ? `${tag}${esc(rf?.name || "기준 없음")} <span class="text-gray-300 font-normal">↔</span> <span class="text-zzikbang">${esc(sc?.name || "스캔 없음")}</span>`
+      : "스캔본 & 도면 위치 정렬";
+    $("al-title").title = `${rf?.name || "-"} ↔ ${sc?.name || "-"}`;
+  }
   const ls = state.activeScan?.locked;
   $("al-lock").innerHTML = `<i class="fa-solid fa-${ls ? "lock" : "lock-open"}"></i><span>${ls ? "고정됨" : "고정"}</span>`;
-  $("al-lock").className = `flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold border ${ls ? "bg-zzikbang text-white border-zzikbang" : "bg-white text-gray-500 border-gray-200 hover:text-zzikbang"}`;
+  $("al-lock").className = `shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold border ${ls ? "bg-zzikbang text-white border-zzikbang" : "bg-white text-gray-500 border-gray-200 hover:text-zzikbang"}`;
   $("al-lock").title = ls ? "정렬 고정 해제" : "지금 정렬 상태를 고정 (스캔과 맞춰 둔 도면/BIM이 더 이상 움직이지 않음)";
   const opt = (arr, active, none) => arr.length ? arr.map((o) => `<option value="${o.id}" ${o === active ? "selected" : ""}>${esc(o.name)}</option>`).join("") : `<option>${none}</option>`;
   $("al-scan").innerHTML = opt(state.scans, state.activeScan, "스캔 없음");
