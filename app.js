@@ -295,8 +295,9 @@ function refreshEmpty() {
   $("empty-state").classList.toggle("hidden", !!(state.scans.length || state.refs.length));
 }
 function applyVisibility() {
-  for (const s of state.scans) s.group.visible = s.visible && state.layer !== "ref";
-  for (const r of state.refs) r.group.visible = r.visible && state.layer !== "scan";
+  const L = state.layer || "all";
+  for (const s of state.scans) s.group.visible = s.visible && (L === "all" || L === "scan");
+  for (const r of state.refs) r.group.visible = r.visible && (L === "all" || L === (r.type === "bim" ? "bim" : "dwg"));
 }
 
 // =====================================================================
@@ -807,11 +808,15 @@ const MESH_BADGE = ["3D", "bg-teal-50 text-teal-600"];
 const KIND_BADGE = { stl: ["STL", "bg-teal-50 text-teal-600"], dae: MESH_BADGE, kmz: MESH_BADGE, obj: MESH_BADGE, glb: MESH_BADGE, gltf: MESH_BADGE, fbx: MESH_BADGE, pdf: ["PDF", "bg-red-50 text-red-500"], dwg: ["DWG", "bg-blue-50 text-blue-600"], dxf: ["DXF", "bg-blue-50 text-blue-600"], ifc: ["IFC", "bg-emerald-50 text-emerald-600"], image: ["IMG", "bg-purple-50 text-purple-500"] };
 
 function renderRefs() {
-  $("dropzone-cad").classList.toggle("hidden", state.refs.length > 0);
-  $("btn-add-cad").classList.toggle("hidden", !state.refs.length);
-  const list = $("ref-list");
-  list.innerHTML = "";
+  const nDwg = state.refs.filter((o) => o.type === "drawing").length, nBim = state.refs.length - nDwg;
+  $("dropzone-cad").classList.toggle("hidden", nDwg > 0);
+  $("btn-add-cad").classList.toggle("hidden", !nDwg);
+  $("dropzone-bim").classList.toggle("hidden", nBim > 0);
+  $("btn-add-bim").classList.toggle("hidden", !nBim);
+  $("dwg-list").innerHTML = "";
+  $("bim-list").innerHTML = "";
   for (const r of state.refs) {
+    const list = $(r.type === "bim" ? "bim-list" : "dwg-list");
     const [kb, kc] = KIND_BADGE[r.kind] || ["REF", "bg-gray-100 text-gray-500"];
     const el = document.createElement("div");
     el.className = `rounded-xl border p-2.5 space-y-2 ${r === state.activeRef ? "border-blue-400 bg-blue-50/30" : "border-gray-200 bg-white"}`;
@@ -905,7 +910,9 @@ $("input-ply").addEventListener("change", (e) => { onScanFiles([...e.target.file
 $("btn-add-ply").addEventListener("click", () => $("input-ply").click());
 $("btn-add-cad").addEventListener("click", () => $("input-cad").click());
 $("input-cad").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) onRefFile(f); });
-for (const [zone, cb] of [["dropzone-ply", (fs) => onScanFiles(fs)], ["dropzone-cad", (fs) => fs[0] && onRefFile(fs[0])]]) {
+$("btn-add-bim").addEventListener("click", () => $("input-bim").click());
+$("input-bim").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) onRefFile(f); });
+for (const [zone, cb] of [["dropzone-ply", (fs) => onScanFiles(fs)], ["dropzone-cad", (fs) => fs[0] && onRefFile(fs[0])], ["dropzone-bim", (fs) => fs[0] && onRefFile(fs[0])]]) {
   const z = $(zone);
   z.addEventListener("dragover", (e) => { e.preventDefault(); z.classList.add("border-zzikbang"); });
   z.addEventListener("dragleave", () => z.classList.remove("border-zzikbang"));
@@ -1381,8 +1388,7 @@ function renderAlign() {
   const r = state.activeRef;
   // step 2 only applies to raster drawings without known scale
   const isDrawing = r?.type === "drawing";
-  $("al-step-scale").classList.toggle("opacity-40", !isDrawing);
-  $("al-step-scale").querySelectorAll("button,input").forEach((x) => (x.disabled = !isDrawing));
+  $("al-step-scale").classList.toggle("hidden", !isDrawing);
   const badge = $("al-calib-badge");
   if (!r) badge.textContent = "";
   else if (r.type === "bim") { badge.textContent = "BIM 실척"; badge.className = "ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600"; }
