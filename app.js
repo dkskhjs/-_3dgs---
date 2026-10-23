@@ -51,7 +51,7 @@ function applyFront(r) {
   if (r.type !== "bim") return;
   for (const m of r.materials) {
     m.depthWrite = frontScan || m.opacity >= 0.99;
-    m.polygonOffset = frontScan;
+    m.polygonOffset = true; // faces sit a hair behind their outline lines (and behind coincident scan surfaces)
     m.polygonOffsetFactor = 1;
     m.polygonOffsetUnits = 4;
     m.needsUpdate = true;
@@ -703,6 +703,7 @@ function addModel({ name, group, materials, objects, pieces, coordMatrix, ifcTex
   r.levelIdx = Math.max(0, r.levels.findIndex((l) => l.area >= maxArea * 0.25));
   styleModel(r, r.opts);
   applyFront(r);
+  buildModelEdges(r);
   for (const m of materials) m.clippingPlanes = cutPlanes();
   addRef(r);
   return r;
@@ -731,7 +732,56 @@ function removeRef(r) {
 }
 function styleRef(r) {
   if (r.type === "drawing") rebuildDrawing(r);
-  else { styleModel(r, r.opts); applyFront(r); }
+  else { styleModel(r, r.opts); applyFront(r); styleEdges(r); }
+}
+// ---- outlines of every IFC element (per element, so they stay complete where elements touch)
+function buildModelEdges(r) {
+  const byId = new Map(); // element id -> triangle positions
+  const loose = [];
+  for (const m of r.group.children) {
+    const g = m.isMesh && m.geometry;
+    if (!g?.attributes?.position) continue;
+    const ids = g.userData.ids;
+    if (!ids) { loose.push(m); continue; }
+    const pos = g.attributes.position.array, idx = g.index?.array, nTri = (idx ? idx.length : pos.length / 3) / 3;
+    for (let t = 0; t < nTri; t++) {
+      let arr = byId.get(ids[t]);
+      if (!arr) byId.set(ids[t], (arr = []));
+      for (let k = 0; k < 3; k++) { const v = idx ? idx[t * 3 + k] : t * 3 + k; arr.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]); }
+    }
+  }
+  r.elemEdges ??= new Map();
+  const all = [];
+  const edgesOf = (tri) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3));
+    const e = new THREE.EdgesGeometry(g, 25).attributes.position.array;
+    g.dispose();
+    return e;
+  };
+  for (const [id, tri] of byId) {
+    const e = r.elemEdges.get(id) ?? edgesOf(tri);
+    r.elemEdges.set(id, e); // the ruler snaps to the same outlines
+    for (let i = 0; i < e.length; i++) all.push(e[i]);
+  }
+  for (const m of loose) {
+    m.userData.edges ??= new THREE.EdgesGeometry(m.geometry, 25).attributes.position.array;
+    for (const v of m.userData.edges) all.push(v);
+  }
+  if (!all.length) return;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(all, 3));
+  r.edgeMat = new THREE.LineBasicMaterial({ color: 0x3b1a06, transparent: true, depthWrite: false, clippingPlanes: cutPlanes() });
+  r.edges = new THREE.LineSegments(geo, r.edgeMat);
+  r.edges.renderOrder = 1;
+  r.edges.userData.dimOverlay = true; // not a pickable surface
+  r.group.add(r.edges);
+  styleEdges(r);
+}
+function styleEdges(r) {
+  if (!r.edgeMat) return;
+  r.edgeMat.opacity = Math.min(1, r.opts.opacity + 0.25);
+  r.edges.visible = r.opts.opacity > 0.02;
 }
 
 async function onRefFile(f, restore = null) {
@@ -1040,7 +1090,7 @@ function applyCut() {
     else if (cutBottom.parent) cutEdit.remove(cutBottom);
   }
   // drawings are flat sheets at their own level, so only BIM geometry is clipped
-  for (const ref of state.refs) if (ref.type === "bim") for (const m of ref.materials) { m.clippingPlanes = cutPlanes(); m.needsUpdate = true; }
+  for (const ref of state.refs) if (ref.type === "bim") for (const m of [...ref.materials, ref.edgeMat].filter(Boolean)) { m.clippingPlanes = cutPlanes(); m.needsUpdate = true; }
   // orange wire box showing the kept volume
   sectionBox.visible = !!r;
   if (r) {
