@@ -475,6 +475,9 @@
                             <button id="al-scanscale" class="btn-sub" title="2점 실측 스케일"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         </div>
                         <p id="al-floor-info" class="hidden"></p>
+                        <label id="al-level-wrap" class="hidden block"><span class="text-[11px] font-semibold text-gray-500"><i class="fa-solid fa-layer-group mr-1"></i>BIM 바닥 레벨</span>
+                            <select id="al-bimlevel" class="inp mt-0.5"></select></label>
+                        <button id="al-seat" class="btn-sub w-full"><i class="fa-solid fa-arrows-up-down"></i>스캔 바닥 → 기준 바닥 높이</button>
                     </div>
 
                     <!-- Step 3 -->
@@ -486,9 +489,6 @@
                             <label class="block"><span class="text-[11px] font-semibold text-gray-500"><i class="fa-solid fa-maximize mr-1"></i>스케일</span>
                                 <select id="al-scale" class="inp mt-0.5"><option value="1">맞춤</option><option value="0">고정</option></select></label>
                         </div>
-                        <label id="al-level-wrap" class="hidden block"><span class="text-[11px] font-semibold text-gray-500">BIM 바닥 레벨</span>
-                            <select id="al-bimlevel" class="inp mt-0.5"></select></label>
-                        <button id="al-seat" class="btn-sub w-full"><i class="fa-solid fa-arrows-up-down"></i>바닥 높이 맞추기</button>
                         <div id="anchor-box" class="hidden flex items-center gap-1.5 text-[10px] text-gray-500 cursor-help">
                             <i class="fa-solid fa-anchor text-zzikbang"></i>
                             <span id="anchor-note" class="flex-1 truncate"></span>
