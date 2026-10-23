@@ -2637,6 +2637,10 @@ function setDimMode(on) {
   snapMark.visible = false;
   elemLine.visible = false;
   showLive(null);
+  if (on && dim.snap && state.scans.some((s) => s.group.visible && s._outline === undefined)) {
+    loader(true, "스캔 외곽(점이 많은 벽 선)을 인식하는 중...");
+    setTimeout(() => { try { for (const s of state.scans) if (s.group.visible) scanOutline(s); } finally { loader(false); } }, 30);
+  }
   if (on) {
     renderDimCard();
     toast("자: 두 점을 클릭해 거리를 잽니다 · Esc 나가기", 3000);
@@ -2678,14 +2682,14 @@ const elemLine = new LineSegments2(new LineSegmentsGeometry(), fatMaterial(0xffb
 elemLine.renderOrder = 2002;
 elemLine.frustumCulled = false;
 elemLine.visible = false;
-function showElemOutline(r, edges, key) {
-  if (!r) { elemLine.visible = false; return; }
+function showElemOutline(parent, edges, key) {
+  if (!parent) { elemLine.visible = false; return; }
   if (elemLine.userData.key !== key) {
     elemLine.geometry.dispose();
     elemLine.geometry = new LineSegmentsGeometry().setPositions(edges);
     elemLine.userData.key = key;
   }
-  if (elemLine.parent !== r.group) r.group.add(elemLine);
+  if (elemLine.parent !== parent) parent.add(elemLine);
   elemLine.visible = true;
 }
 // nearest CAD endpoint / raster corner on a drawing sheet, in world space
@@ -2720,18 +2724,31 @@ function rulerPoint(ev) {
     return { ...(dim.snap ? drawingSnap(dr, dHit, wppAt(dHit.point)) : { p: dHit.point.clone(), kind: "surface" }), frame };
   }
   const near = hit && dist(hit.point) <= dist(sp) + 0.05;
-  if (!near) { showElemOutline(null); return sp ? { p: sp, kind: "scan" } : null; }
+  if (!near) {
+    if (!sp) { showElemOutline(null); return null; }
+    // scan: snap to the outline of its dense wall lines
+    const s = state.scans.find((o) => o.group.visible && inCore(o, sp)) || state.activeScan;
+    const E = dim.snap && s ? scanOutline(s) : null;
+    if (!E) { showElemOutline(null); return { p: sp, kind: "scan" }; }
+    showElemOutline(s.mesh, E, `scan:${s.id}`);
+    const r = snapEdges(E, s.mesh, sp, wppAt(sp));
+    return r.kind === "surface" ? { ...r, kind: "scan" } : r;
+  }
   if (!dim.snap) { showElemOutline(null); return { p: hit.point.clone(), kind: "surface" }; }
   const m = hit.object;
   m.updateMatrixWorld(true);
   const model = models.find((o) => o.group === m.parent);
   const id = m.geometry.userData.ids ? m.geometry.userData.ids[hit.faceIndex] : null;
-  const inv = m.matrixWorld.clone().invert(), q = hit.point.clone().applyMatrix4(inv);
-  // 14 px on screen, in the mesh's own units
-  const wpp = wppAt(hit.point);
-  const R = (14 * wpp) / new THREE.Vector3().setFromMatrixScale(m.matrixWorld).x;
   const E = outlineEdges(model, m, id);
-  showElemOutline(model, E, `${model.id}:${id ?? m.uuid}`);
+  showElemOutline(model.group, E, `${model.id}:${id ?? m.uuid}`);
+  return snapEdges(E, m, hit.point, wppAt(hit.point));
+}
+// corners within ~10 px win, then the nearest point on an edge (14 px), else the surface point;
+// E is a segment list in obj's own space
+function snapEdges(E, obj, point, wpp) {
+  obj.updateMatrixWorld(true);
+  const mw = obj.matrixWorld, q = point.clone().applyMatrix4(mw.clone().invert());
+  const R = (14 * wpp) / new THREE.Vector3().setFromMatrixScale(mw).x;
   let best = null, bestD = R, vert = null, vertD = R;
   for (let i = 0; i < E.length; i += 6) {
     const ax = E[i], ay = E[i + 1], az = E[i + 2], bx = E[i + 3], by = E[i + 4], bz = E[i + 5];
@@ -2745,11 +2762,37 @@ function rulerPoint(ev) {
     const px = ax + dx * t, py = ay + dy * t, pz = az + dz * t, d = Math.hypot(q.x - px, q.y - py, q.z - pz);
     if (d < bestD) { bestD = d; best = [px, py, pz]; }
   }
-  // corners win within ~10 px, then edges
-  const frame = () => edgeFrame(E, m.matrixWorld);
-  if (vert && vertD < R * 0.75) return { p: new THREE.Vector3(...vert).applyMatrix4(m.matrixWorld), kind: "vertex", frame };
-  if (best) return { p: new THREE.Vector3(...best).applyMatrix4(m.matrixWorld), kind: "edge", frame };
-  return { p: hit.point.clone(), kind: "surface", frame };
+  const frame = () => edgeFrame(E, mw);
+  if (vert && vertD < R * 0.75) return { p: new THREE.Vector3(...vert).applyMatrix4(mw), kind: "vertex", frame };
+  if (best) return { p: new THREE.Vector3(...best).applyMatrix4(mw), kind: "edge", frame };
+  return { p: point.clone(), kind: "surface", frame };
+}
+// scan outline for snapping: the densest wall lines of a wall-height slice (plan), each turned into a floor
+// edge, a top edge and vertical corner edges at its ends; built once, kept in the scan's own space
+function scanOutline(s) {
+  if (s._outline !== undefined) return s._outline;
+  s._outline = null;
+  try {
+    const floorY = scanFloorY(s);
+    const { S } = scanSlice(s);
+    if (S.length < 400) return null;
+    const faces = extractFaces(S, { minLen: 0.5, density: 0.3, maxLines: 60 });
+    let top = scanHeights(s, floorY).ceil;
+    if (!(top - floorY > 1.8 && top - floorY < 8)) top = floorY + 2.7;
+    const inv = s.mesh.matrixWorld.clone().invert(), w = [], v = new THREE.Vector3();
+    const put = (x, y, z) => { v.set(x, y, z).applyMatrix4(inv); w.push(v.x, v.y, v.z); };
+    for (const f of faces) {
+      const ax = f.cx + f.dx * f.t0, az = f.cz + f.dz * f.t0, bx = f.cx + f.dx * f.t1, bz = f.cz + f.dz * f.t1;
+      put(ax, floorY, az); put(bx, floorY, bz);
+      put(ax, top, az); put(bx, top, bz);
+      put(ax, floorY, az); put(ax, top, az);
+      put(bx, floorY, bz); put(bx, top, bz);
+    }
+    s._outline = w.length ? Float32Array.from(w) : null;
+  } catch (e) {
+    console.warn("scan outline:", e);
+  }
+  return s._outline;
 }
 const SNAP_COLOR = { vertex: 0xef4444, edge: 0xf59e0b, surface: 0xffffff, scan: 0x22c55e };
 // axes of the object under the first point (SketchUp style): the dominant plan direction of its outline
