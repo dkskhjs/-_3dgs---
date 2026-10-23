@@ -768,7 +768,7 @@ async function loadImage(f) {
   ctx.drawImage(img, 0, 0, cv.width, cv.height);
   const dpi = 150 * k;
   addDrawing({ name: f.name, kind: "image", canvas: cv, dpi, ppm: dpi / 0.0254 / 100, info: `${img.width}×${img.height}px 이미지` });
-  toast("이미지 도면은 축척 정보가 없습니다 — 정렬 화면에서 축척을 맞춰주세요");
+  toast("이미지 도면은 축척 정보가 없습니다 — 왼쪽 도면 아래 축척에서 맞춰주세요");
 }
 
 let pdfjs;
@@ -801,7 +801,7 @@ async function loadPdf(f) {
   const dpi = 72 * scale; // PDF units are 1/72 inch of paper, so 1:N gives an exact scale
   const paper = `${Math.round(vp1.width / 72 * 25.4)}×${Math.round(vp1.height / 72 * 25.4)} mm 용지`;
   addDrawing({ name: f.name + (doc.numPages > 1 ? ` (p.${pageNo})` : ""), kind: "pdf", canvas: cv, dpi, ppm: dpi / 0.0254 / 100, info: paper });
-  toast(`PDF ${paper} — 정렬 화면에서 축척(1:N)을 입력하거나 2점으로 보정하세요`, 5000);
+  toast(`PDF ${paper} — 왼쪽 도면 아래 축척(1:N·DPI)을 입력하거나 자 버튼으로 2점 보정하세요`, 5000);
 }
 
 const MESH_BADGE = ["3D", "bg-teal-50 text-teal-600"];
@@ -1395,6 +1395,7 @@ function renderAlign() {
   else if (r.calibrated) { badge.textContent = "보정 완료"; badge.className = "ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600"; }
   else { badge.textContent = "미보정"; badge.className = "ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-600"; }
   if (isDrawing) {
+    if (document.activeElement !== $("dwg-height")) $("dwg-height").value = r.group.position.y.toFixed(2);
     if (r.dpi) $("al-dpi").value = Math.round(r.dpi);
     $("al-scale-info").textContent = `${r.pxW}×${r.pxH}px · 1 m = ${r.ppm.toFixed(2)} px · 도면 실제 크기 ${(r.pxW / r.ppm).toFixed(2)} × ${(r.pxH / r.ppm).toFixed(2)} m` +
       (r.kind === "dwg" || r.kind === "dxf" ? " (CAD 단위로 자동 설정됨)" : "");
@@ -1606,6 +1607,22 @@ $("al-calib2").onclick = async () => {
   const px = Math.hypot(res.pts[1].x - res.pts[0].x, res.pts[1].y - res.pts[0].y);
   setPpm(r, px / (res.length / 1000));
   toast(`축척 보정 완료: ${px.toFixed(1)} px = ${res.length.toLocaleString()} mm`);
+};
+// drawing sheet height (the plan's level in 3D)
+function setDrawingHeight(y) {
+  const r = state.activeRef; if (r?.type !== "drawing" || !Number.isFinite(y)) return;
+  if (lockOwner(r.group)) return lockedToast();
+  r.group.position.y = y;
+  r.group.updateMatrixWorld(true);
+  $("dwg-height").value = y.toFixed(2);
+  updateXform();
+}
+$("dwg-height").addEventListener("change", () => setDrawingHeight(+$("dwg-height").value));
+$("dwg-height-up").onclick = (e) => setDrawingHeight((state.activeRef?.group.position.y ?? 0) + (e.shiftKey ? 0.01 : 0.1));
+$("dwg-height-down").onclick = (e) => setDrawingHeight((state.activeRef?.group.position.y ?? 0) - (e.shiftKey ? 0.01 : 0.1));
+$("dwg-height-floor").onclick = () => {
+  const s = state.activeScan; if (!s) return toast("스캔을 먼저 올려주세요");
+  setDrawingHeight(scanFloorY(s));
 };
 $("al-ratio-apply").onclick = () => {
   const r = state.activeRef; if (r?.type !== "drawing") return;

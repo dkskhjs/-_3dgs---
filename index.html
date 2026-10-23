@@ -172,7 +172,7 @@
     <div class="flex-1 flex overflow-hidden relative">
 
         <!-- 1. Left Sidebar -->
-        <aside id="sidebar" class="w-72 bg-white border-r border-gray-200 flex-col shrink-0 z-30 transition-all duration-300">
+        <aside id="sidebar" style="width:18rem" class="w-72 bg-white border-r border-gray-200 flex-col shrink-0 z-30 transition-all duration-300">
             <div class="px-4 py-3 flex items-center gap-2 border-b border-gray-100">
                 <div class="w-7 h-7 bg-zzikbang rounded-lg flex items-center justify-center text-white font-extrabold text-sm shadow-md tracking-tighter">ZZ</div>
                 <span class="font-extrabold text-base tracking-tight text-gray-900">찍방 <span class="text-[10px] font-normal text-zzikbang font-mono">SCAN</span></span>
@@ -220,11 +220,17 @@
                         <!-- scale of the selected drawing -->
                         <div id="al-step-scale" class="hidden space-y-1.5 rounded-xl border border-gray-200 p-2.5">
                             <div class="flex items-center gap-1.5 text-[11px] font-extrabold text-gray-700"><i class="fa-solid fa-ruler text-blue-500"></i>축척<span id="al-calib-badge" class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded"></span></div>
-                            <button id="al-calib2" class="btn-sub w-full"><i class="fa-solid fa-ruler"></i>2점 + 실제 치수</button>
-                            <div class="grid grid-cols-3 gap-1.5 items-end">
-                                <label class="block"><span class="text-[10px] text-gray-500">1 :</span><input type="number" id="al-ratio" value="100" class="inp"></label>
-                                <label class="block"><span class="text-[10px] text-gray-500">DPI</span><input type="number" id="al-dpi" value="150" class="inp"></label>
-                                <button id="al-ratio-apply" class="btn-sub h-[28px]">적용</button>
+                            <div class="flex items-end gap-1.5">
+                                <label class="block flex-1"><span class="text-[10px] text-gray-500">1 :</span><input type="number" id="al-ratio" value="100" class="inp"></label>
+                                <label class="block flex-1"><span class="text-[10px] text-gray-500">DPI</span><input type="number" id="al-dpi" value="150" class="inp"></label>
+                                <button id="al-ratio-apply" class="btn-sub px-2 h-[28px]" title="축척 적용"><i class="fa-solid fa-check"></i></button>
+                                <button id="al-calib2" class="btn-sub px-2 h-[28px]" title="2점 + 실제 치수로 축척 보정"><i class="fa-solid fa-ruler"></i></button>
+                            </div>
+                            <div class="flex items-end gap-1.5">
+                                <label class="block flex-1"><span class="text-[10px] text-gray-500"><i class="fa-solid fa-arrows-up-down mr-1"></i>도면 높이 (m)</span><input type="number" id="dwg-height" step="0.05" value="0" class="inp"></label>
+                                <button id="dwg-height-down" class="btn-sub px-2 h-[28px]" title="10 cm 내리기 (Shift: 1 cm)"><i class="fa-solid fa-chevron-down"></i></button>
+                                <button id="dwg-height-up" class="btn-sub px-2 h-[28px]" title="10 cm 올리기 (Shift: 1 cm)"><i class="fa-solid fa-chevron-up"></i></button>
+                                <button id="dwg-height-floor" class="btn-sub px-2 h-[28px]" title="스캔 바닥 높이에 맞추기"><i class="fa-solid fa-arrows-down-to-line"></i></button>
                             </div>
                             <p id="al-scale-info" class="hidden"></p>
                         </div>
@@ -469,8 +475,6 @@
                             <button id="al-scanscale" class="btn-sub" title="2점 실측 스케일"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         </div>
                         <p id="al-floor-info" class="hidden"></p>
-                    </div>
-                        <p id="al-scale-info" class="hidden"></p>
                     </div>
 
                     <!-- Step 3 -->
