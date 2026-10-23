@@ -178,7 +178,8 @@ function readQuantities(modelID) {
 export function styleModel(model, { opacity, ghost, color }) {
   for (const m of model.materials) {
     // single colour, except strongly coloured parts (sensor / marker objects) which keep their own colour
-    const keep = ghost && hsv(m.userData.baseColor.r, m.userData.baseColor.g, m.userData.baseColor.b)[1] > 0.6;
+    const [h, sat] = hsv(m.userData.baseColor.r, m.userData.baseColor.g, m.userData.baseColor.b);
+    const keep = ghost && sat > 0.6 && (h < 15 || h > 345); // red sensor / marker objects only
     m.color.copy(ghost && !keep ? new THREE.Color(color) : m.userData.baseColor);
     m.opacity = opacity * (ghost ? 1 : m.userData.baseOpacity);
     m.depthWrite = m.opacity >= 0.99;
