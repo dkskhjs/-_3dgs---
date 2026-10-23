@@ -2907,7 +2907,7 @@ $("btn-land").onclick = async () => {
   const s = state.activeScan;
   if (s) { const fy = scanFloorAt(s, p.x, p.z, p.y + 0.3); if (fy != null && Math.abs(fy - p.y) < 0.5) floorY = fy; }
   landAt(p, floorY);
-  toast("바닥 착륙 — WASD 걷기 · Shift 달리기 · 드래그 둘러보기 · Space/Esc 해제", 6000);
+  toast("바닥 착륙 — WASD 걷기 · Shift 달리기 · 드래그 둘러보기 · Space 해제", 6000);
 };
 // Space: drop onto the floor right below the camera and walk there; Space again lifts off (stays in place)
 window.addEventListener("keydown", (e) => {
@@ -2927,7 +2927,6 @@ window.addEventListener("keydown", (e) => {
   toast("바닥 착륙 — WASD 걷기 · Shift 달리기 · 드래그 둘러보기 · Space 해제", 4000);
 });
 for (const id of ["btn-reset-view", "btn-top-view", "btn-side-view"]) $(id).addEventListener("click", () => exitWalk(false), true);
-window.addEventListener("keydown", (e) => { if (e.key === "Escape" && walk && !pick) exitWalk(); });
 
 // =====================================================================
 // Scan colours: original / greyscale / overlap with the BIM (scan near a model surface in colour,
