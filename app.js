@@ -693,7 +693,7 @@ function addModel({ name, group, materials, objects, pieces, coordMatrix, ifcTex
     id: uid++, type: "bim", kind, name, info, group, materials, objects: objects || [], pieces: pieces || [], visible: true, calibrated: true,
     coordMatrix, ifcText, quantities: quantities || new Map(), units,
     markerGroups: markerGroups(objects || []),
-    opts: { opacity: state.refOpacity, ghost: true, color: "#ff6b00" }, refPts: [], pins: new THREE.Group(),
+    opts: { opacity: state.refOpacity, ghost: true, color: "#d4d7dc" }, refPts: [], pins: new THREE.Group(),
   };
   group.add(r.pins);
   scene.add(group);
@@ -771,7 +771,7 @@ function buildModelEdges(r) {
   if (!all.length) return;
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(all, 3));
-  r.edgeMat = new THREE.LineBasicMaterial({ color: 0x3b1a06, transparent: true, depthWrite: false, clippingPlanes: cutPlanes() });
+  r.edgeMat = new THREE.LineBasicMaterial({ color: 0x374151, transparent: true, depthWrite: false, clippingPlanes: cutPlanes() });
   r.edges = new THREE.LineSegments(geo, r.edgeMat);
   r.edges.renderOrder = 1;
   r.edges.userData.dimOverlay = true; // not a pickable surface
