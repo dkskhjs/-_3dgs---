@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+import { Line2 } from "three/addons/lines/Line2.js";
+import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
+import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+import { LineGeometry } from "three/addons/lines/LineGeometry.js";
+import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { SparkRenderer, SplatMesh, SplatEdit, SplatEditSdf, SplatEditSdfType, SplatEditRgbaBlendMode } from "@sparkjsdev/spark";
 import { loadCad } from "./cad.js";
 import { loadIfc, styleModel, floorLevels, markerGroups, colorMarkers } from "./bim.js";
@@ -76,6 +81,24 @@ function resize() {
   labelRenderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  for (const m of fatMaterials) m.resolution.set(w, h);
+}
+// thick screen-space lines (WebGL lines are always 1 px)
+const fatMaterials = new Set();
+function fatMaterial(color, width, opacity = 1) {
+  const m = new LineMaterial({ color, linewidth: width, transparent: true, opacity, depthTest: false });
+  m.resolution.set(container.clientWidth || 1, container.clientHeight || 1);
+  fatMaterials.add(m);
+  return m;
+}
+function fatLine(a, b, color, width) {
+  const g = new LineGeometry();
+  g.setPositions([a.x, a.y, a.z, b.x, b.y, b.z]);
+  const l = new Line2(g, fatMaterial(color, width));
+  l.computeLineDistances();
+  l.renderOrder = 2001;
+  l.frustumCulled = false;
+  return l;
 }
 new ResizeObserver(resize).observe(container);
 resize();
@@ -2551,12 +2574,29 @@ const dim = { on: false, group: new THREE.Group(), a: null, list: [], snap: true
 scene.add(dim.group);
 const mm = (v) => `${Math.round(v * 1000).toLocaleString()}`;
 const snapMark = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: 0xf59e0b, depthTest: false }));
-snapMark.renderOrder = 1001;
+snapMark.renderOrder = 2004;
 snapMark.visible = false;
-snapMark.onBeforeRender = () => snapMark.scale.setScalar(Math.max(0.01, camera.position.distanceTo(snapMark.position) * 0.007));
+snapMark.onBeforeRender = () => snapMark.scale.setScalar(Math.max(0.01, camera.position.distanceTo(snapMark.position) * 0.011));
+// white ring around the snap point so the cursor reads on any background
+const snapRing = new THREE.Mesh(new THREE.RingGeometry(1.35, 1.9, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true, side: THREE.DoubleSide }));
+snapRing.renderOrder = 2003;
+snapRing.onBeforeRender = () => snapRing.quaternion.copy(camera.quaternion);
+snapMark.add(snapRing);
 scene.add(snapMark);
+// ruler mode dims the scene behind the ruler (a full-screen quad drawn just before the ruler pieces)
+const dimLayer = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  vertexShader: "void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }",
+  fragmentShader: "void main() { gl_FragColor = vec4(0.0, 0.0, 0.0, 0.45); }",
+  transparent: true, depthTest: false, depthWrite: false,
+}));
+dimLayer.renderOrder = 1999;
+dimLayer.frustumCulled = false;
+dimLayer.visible = false;
+scene.add(dimLayer);
 function setDimMode(on) {
   dim.on = on;
+  dimLayer.visible = on;
+  canvas.style.cursor = on ? "crosshair" : "";
   $("tool-ruler").classList.toggle("bg-amber-50", on);
   $("tool-ruler").classList.toggle("ring-1", on);
   $("tool-ruler").classList.toggle("ring-amber-300", on);
@@ -2601,15 +2641,15 @@ function outlineEdges(r, mesh, id) {
   return r.elemEdges.get(id);
 }
 // the outline of the element under the cursor, drawn so it is clear what the ruler snaps to
-const elemLine = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff6b00, depthTest: false, transparent: true, opacity: 0.9 }));
-elemLine.renderOrder = 903;
+const elemLine = new LineSegments2(new LineSegmentsGeometry(), fatMaterial(0xffb020, 2.5, 0.95));
+elemLine.renderOrder = 2002;
+elemLine.frustumCulled = false;
 elemLine.visible = false;
 function showElemOutline(r, edges, key) {
   if (!r) { elemLine.visible = false; return; }
   if (elemLine.userData.key !== key) {
     elemLine.geometry.dispose();
-    elemLine.geometry = new THREE.BufferGeometry();
-    elemLine.geometry.setAttribute("position", new THREE.Float32BufferAttribute(edges, 3));
+    elemLine.geometry = new LineSegmentsGeometry().setPositions(edges);
     elemLine.userData.key = key;
   }
   if (elemLine.parent !== r.group) r.group.add(elemLine);
@@ -2731,7 +2771,7 @@ canvas.addEventListener("pointermove", (e) => {
     if (!r) { elemLine.visible = false; showLive(null); return; }
     snapMark.position.copy(r.p);
     snapMark.material.color.setHex(SNAP_COLOR[r.kind]);
-    if (dim.a) { dim.rubber.geometry.setFromPoints([dim.a, r.p]); showLive(dim.a, r.p, r.mode); }
+    if (dim.a) { dim.rubber.geometry.setPositions([dim.a.x, dim.a.y, dim.a.z, r.p.x, r.p.y, r.p.z]); showLive(dim.a, r.p, r.mode); }
   });
 });
 function rulerClick(ev) {
@@ -2739,10 +2779,9 @@ function rulerClick(ev) {
   if (!r) return toast("스캔이나 모델 위를 클릭하세요", 2000);
   if (!dim.a) {
     dim.a = r.p.clone();
-    const d = dot(0xf59e0b); d.position.copy(dim.a);
+    const d = dot(0xffd166); d.position.copy(dim.a); d.renderOrder = 2003;
     dim.aDot = d;
-    dim.rubber = new THREE.Line(new THREE.BufferGeometry().setFromPoints([dim.a, dim.a]), new THREE.LineDashedMaterial({ color: 0xf59e0b, depthTest: false }));
-    dim.rubber.renderOrder = 902;
+    dim.rubber = fatLine(dim.a, dim.a, 0xffd166, 3);
     dim.group.add(d, dim.rubber);
     return;
   }
@@ -2751,10 +2790,9 @@ function rulerClick(ev) {
   dim.a = null;
   showLive(null);
   const g = new THREE.Group();
-  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: 0xf59e0b, depthTest: false }));
-  line.renderOrder = 902;
+  const line = fatLine(a, b, 0xffb020, 3.5);
   g.add(line, dim.aDot);
-  const d2 = dot(0xf59e0b); d2.position.copy(b); g.add(d2);
+  const d2 = dot(0xffd166); d2.position.copy(b); d2.renderOrder = 2003; g.add(d2);
   const m = { d: a.distanceTo(b), h: Math.hypot(a.x - b.x, a.z - b.z), v: Math.abs(a.y - b.y) };
   const o = new THREE.Object3D();
   o.position.copy(a).add(b).multiplyScalar(0.5);
