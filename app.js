@@ -18,6 +18,7 @@ import { addMarkersToIfc, zipOne } from "./ifcexport.js";
 import { extractFaces, facesToWalls, buildScanIfc, buildMeshIfc } from "./scan2ifc.js";
 import { voxelBoxes } from "./voxel.js";
 import { MESH_EXT, loadMeshModel } from "./mesh.js";
+import { newPersistId, persistFile, persistMeta, persistDelete, persistLoadAll } from "./persist.js";
 
 const $ = (id) => document.getElementById(id);
 const UP = new THREE.Vector3(0, 1, 0);
@@ -431,12 +432,13 @@ async function loadScanFile(f) {
   return s;
 }
 
-async function onScanFiles(files) {
+async function onScanFiles(files, restore = null) {
   for (const f of files) {
     loader(true, `3DGS 파일 (${f.name}) 로딩 중...`);
     let s = null;
     try {
       s = await loadScanFile(f);
+      keepLayer(s, "scan", f, restore);
       if (s.offset) toast(`큰 좌표값을 원점 기준으로 옮겼습니다 (원점 오프셋 ${s.offset.map((v) => v.toFixed(2)).join(", ")})`, 6000);
     } catch (e) {
       console.error(e);
@@ -445,7 +447,8 @@ async function onScanFiles(files) {
       loader(false);
     }
     if (!s) continue;
-    if ($("floor-auto").checked) await runFloor(s);
+    if (restore) restoreScan(s, restore);
+    else if ($("floor-auto").checked) await runFloor(s);
     else fitView();
   }
   renderAll();
@@ -561,6 +564,7 @@ function flashFloor(s) {
 }
 
 function removeScan(s) {
+  if (s.persistId) persistDelete(s.persistId);
   scene.remove(s.group);
   dropLabels(s.group); // marker labels are DOM nodes and would otherwise stay on screen
   s.mesh.dispose?.();
@@ -704,7 +708,9 @@ function addModel({ name, group, materials, objects, pieces, coordMatrix, ifcTex
   return r;
 }
 
+let refFile = null, refRestore = null; // file being opened by onRefFile (addRef stores it)
 function addRef(r) {
+  if (refFile) keepLayer(r, "ref", refFile, refRestore);
   state.refs.push(r);
   state.activeRef = r;
   applyVisibility();
@@ -712,6 +718,7 @@ function addRef(r) {
   if (!state.scans.length) fitView();
 }
 function removeRef(r) {
+  if (r.persistId) persistDelete(r.persistId);
   for (const s of state.scans) {
     s.linked?.delete(r.id);
     if (s.anchor === r.id) s.anchor = [...(s.linked || [])][0] ?? null;
@@ -727,7 +734,19 @@ function styleRef(r) {
   else { styleModel(r, r.opts); applyFront(r); }
 }
 
-async function onRefFile(f) {
+async function onRefFile(f, restore = null) {
+  refFile = f;
+  refRestore = restore;
+  const n0 = state.refs.length;
+  try {
+    await openRefFile(f, restore);
+  } finally {
+    refFile = refRestore = null;
+  }
+  const r = state.refs.length > n0 ? state.refs.at(-1) : null;
+  if (r && restore) restoreRef(r, restore);
+}
+async function openRefFile(f, restore) {
   const ext = f.name.split(".").pop().toLowerCase();
   if (ext === "rvt") {
     await ask("RVT 파일은 직접 열 수 없습니다",
@@ -751,10 +770,12 @@ async function onRefFile(f) {
     if (MESH_EXT.includes(ext)) {
       const m = await loadMeshModel(f, {
         askUnit: async (guessMm, sizeText) => {
+          if (restore?.unitMm) return restore.unitMm;
           loader(false);
           const v = await ask("모델 단위 확인", `이 형식은 단위 정보가 없습니다.\n모델 크기: ${sizeText}\n\n크기로 추정한 값을 채워 두었습니다 (1000 = m, 1 = mm, 25.4 = inch).`, [{ label: "1 모델 단위 = ? mm", value: guessMm }]);
           loader(true, "3D 모델 변환 중...");
-          return v ? parseFloat(v[0]) : null;
+          lastUnitMm = v ? parseFloat(v[0]) : null;
+          return lastUnitMm;
         },
       });
       if (!m) return;
@@ -767,7 +788,13 @@ async function onRefFile(f) {
     } else if (ext === "dwg" || ext === "dxf") {
       const res = await loadCad(f, {
         maxTex: maxTex(),
-        askUnit: async (msg) => { loader(false); const v = await ask("도면 단위", msg, [{ label: "1 도면단위 = ? mm", value: 1 }]); return v ? parseFloat(v[0]) : null; },
+        askUnit: async (msg) => {
+          if (restore?.unitMm) return restore.unitMm;
+          loader(false);
+          const v = await ask("도면 단위", msg, [{ label: "1 도면단위 = ? mm", value: 1 }]);
+          lastUnitMm = v ? parseFloat(v[0]) : null;
+          return lastUnitMm;
+        },
       });
       if (!res) return;
       addDrawing({ name: f.name, kind: ext, canvas: res.canvas, ppm: res.ppm, calibrated: true, info: res.info, snap: res.snap });
@@ -3049,5 +3076,69 @@ for (const b of document.querySelectorAll("#front-mode [data-front]")) {
     }
   };
 }
+
+// =====================================================================
+// Keep added files in this browser and open them again next time (with their placement)
+// =====================================================================
+let lastUnitMm = null, persistOrder = 0;
+function layerMeta(o) {
+  o.group.updateMatrix();
+  const m = { id: o.persistId, kind: o.persistKind, order: o.persistOrder, matrix: o.group.matrix.toArray(), visible: o.visible !== false, unitMm: o.unitMm ?? null };
+  if (o.persistKind === "scan") Object.assign(m, { floorLocal: o.floorLocal?.toArray() ?? null, aligned: !!o.aligned, metric: !!o.metric });
+  else Object.assign(m, { opts: { ...o.opts }, refPts: o.refPts, ...(o.type === "drawing" ? { ppm: o.ppm, calibrated: !!o.calibrated, orient: o.orient } : {}) });
+  return m;
+}
+function keepLayer(o, kind, file, restore) {
+  o.persistKind = kind;
+  o.persistId = restore?.id ?? newPersistId();
+  o.persistOrder = restore?.order ?? Date.now() + persistOrder++;
+  o.unitMm = restore?.unitMm ?? (kind === "ref" ? lastUnitMm : null);
+  lastUnitMm = null;
+  if (!restore) setTimeout(() => persistFile(o.persistId, file, layerMeta(o)), 0); // after the layer is set up
+}
+function restoreScan(s, m) {
+  if (m.matrix) new THREE.Matrix4().fromArray(m.matrix).decompose(s.group.position, s.group.quaternion, s.group.scale);
+  s.group.updateMatrixWorld(true);
+  if (m.floorLocal) s.floorLocal = new THREE.Vector3().fromArray(m.floorLocal);
+  s.aligned = m.aligned;
+  s.metric = m.metric || s.metric;
+  s.visible = m.visible;
+}
+function restoreRef(r, m) {
+  if (r.type === "drawing") {
+    if (m.ppm) { r.ppm = m.ppm; r.calibrated = m.calibrated; }
+    if (m.orient) r.orient = m.orient;
+  }
+  if (m.opts) Object.assign(r.opts, m.opts);
+  if (m.refPts) r.refPts = m.refPts;
+  if (m.matrix) new THREE.Matrix4().fromArray(m.matrix).decompose(r.group.position, r.group.quaternion, r.group.scale);
+  r.group.updateMatrixWorld(true);
+  r.visible = m.visible;
+  styleRef(r);
+  rebuildPins(r);
+}
+// placement changes all the time (alignment, nudges, colours); save it every few seconds and on leaving
+let lastMetaJson = "";
+function saveLayerMeta() {
+  const list = [...state.scans, ...state.refs].filter((o) => o.persistId).map(layerMeta);
+  const json = JSON.stringify(list);
+  if (json === lastMetaJson) return;
+  lastMetaJson = json;
+  persistMeta(list);
+}
+setInterval(saveLayerMeta, 3000);
+addEventListener("pagehide", saveLayerMeta);
+document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && saveLayerMeta());
+(async () => {
+  const saved = await persistLoadAll();
+  if (!saved.length) return;
+  for (const { meta, file } of saved) {
+    if (meta.kind === "scan") await onScanFiles([file], meta);
+    else await onRefFile(file, meta);
+  }
+  applyVisibility();
+  renderAll();
+  fitView();
+})();
 
 window.__app = { state, scene, applyScanColors, scanColor, camera, controls, landAt, exitWalk, getWalk: () => walk, solveYawSimilarity, markerWorld, refPointWorld, pixelToLocal, pickScan, view };
