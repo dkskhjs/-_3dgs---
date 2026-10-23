@@ -156,11 +156,17 @@ function floorBelow(x, z, fromY) {
 }
 // keep the feet on the model's floors while walking: steps up to 0.45 m and down to 1.2 m (stairs, slabs)
 let lastFollow = 0;
+// the floor you see: the visible scan's floor under (x, z), else the model's
+function floorAt(x, z, fromY) {
+  const s = state.scans.find((o) => o === state.activeScan && o.group.visible) || state.scans.find((o) => o.group.visible);
+  const y = s ? scanFloorAt(s, x, z, fromY) : null;
+  return y ?? floorBelow(x, z, fromY);
+}
 function followFloor(x, z) {
   const now = performance.now();
-  if (now - lastFollow < 60) return;
+  if (now - lastFollow < 80) return;
   lastFollow = now;
-  const y = floorBelow(x, z, walk.floorY + 0.45);
+  const y = floorAt(x, z, walk.floorY + 0.45);
   if (y != null && y > walk.floorY - 1.2) walk.floorY = y;
 }
 // scan floor under (x, z): a low percentile of the splats within 0.6 m around the feet, so floaters and
@@ -2595,6 +2601,8 @@ dimLayer.visible = false;
 scene.add(dimLayer);
 function setDimMode(on) {
   dim.on = on;
+  cancelPending();
+  dim.group.visible = on; // finished measurements come back when the ruler is reopened
   dimLayer.visible = on;
   canvas.style.cursor = on ? "crosshair" : "";
   $("tool-ruler").classList.toggle("bg-amber-50", on);
@@ -2774,6 +2782,13 @@ canvas.addEventListener("pointermove", (e) => {
     if (dim.a) { dim.rubber.geometry.setPositions([dim.a.x, dim.a.y, dim.a.z, r.p.x, r.p.y, r.p.z]); showLive(dim.a, r.p, r.mode); }
   });
 });
+// drop a measurement that was started but not finished (Esc, close, toggle, clear)
+function cancelPending() {
+  if (dim.aDot) { dim.group.remove(dim.aDot); dim.aDot = null; }
+  if (dim.rubber) { dim.group.remove(dim.rubber); dim.rubber.geometry.dispose(); fatMaterials.delete(dim.rubber.material); dim.rubber.material.dispose(); dim.rubber = null; }
+  dim.a = null;
+  showLive(null);
+}
 function rulerClick(ev) {
   const r = rulerTarget(ev);
   if (!r) return toast("스캔이나 모델 위를 클릭하세요", 2000);
@@ -2785,13 +2800,12 @@ function rulerClick(ev) {
     dim.group.add(d, dim.rubber);
     return;
   }
-  const a = dim.a, b = r.p.clone();
-  dim.group.remove(dim.rubber);
-  dim.a = null;
-  showLive(null);
+  const a = dim.a, b = r.p.clone(), aDot = dim.aDot;
+  dim.aDot = null; // now part of the finished measurement
+  cancelPending();
   const g = new THREE.Group();
   const line = fatLine(a, b, 0xffb020, 3.5);
-  g.add(line, dim.aDot);
+  g.add(line, aDot);
   const d2 = dot(0xffd166); d2.position.copy(b); d2.renderOrder = 2003; g.add(d2);
   const m = { d: a.distanceTo(b), h: Math.hypot(a.x - b.x, a.z - b.z), v: Math.abs(a.y - b.y) };
   const o = new THREE.Object3D();
@@ -2803,10 +2817,10 @@ function rulerClick(ev) {
   renderDimCard();
 }
 function clearDim() {
+  cancelPending();
   dropLabels(dim.group);
   dim.group.clear();
   dim.list = [];
-  dim.a = null;
 }
 function renderDimCard() {
   const card = $("dim-card");
@@ -2827,9 +2841,7 @@ window.addEventListener("keydown", (e) => {
   if (!dim.on) return;
   if (e.key === "F8") { e.preventDefault(); dim.ortho = !dim.ortho; renderDimCard(); return toast(`직교 ${dim.ortho ? "켜짐" : "꺼짐"} (F8)`, 1200); }
   if (e.key !== "Escape" || !dim.a) return;
-  dim.group.remove(dim.aDot, dim.rubber);
-  dim.a = null;
-  showLive(null);
+  cancelPending();
 });
 
 $("btn-land").onclick = async () => {
@@ -2869,11 +2881,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (!state.scans.length && !state.refs.length) return;
   const p = camera.position;
-  let y = floorBelow(p.x, p.z, p.y);
-  if (y == null) {
-    const s = state.activeScan;
-    y = (s && scanFloorAt(s, p.x, p.z, p.y)) ?? 0;
-  }
+  const y = floorAt(p.x, p.z, p.y) ?? 0;
   landAt(p.clone(), y);
   toast("바닥 착륙 — WASD 걷기 · Shift 달리기 · 드래그 둘러보기 · Space 해제", 4000);
 });
