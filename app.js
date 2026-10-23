@@ -2542,9 +2542,7 @@ window.addEventListener("keydown", (e) => {
   if (e.target.closest?.("input, textarea, select")) return;
   if (!$("modal-pick").classList.contains("hidden") || !$("modal-ask").classList.contains("hidden")) return;
   if (e.key === "Escape") return cancelPick();
-  if ($("panel-align").classList.contains("hidden")) return;
-  const map = { ArrowLeft: "x-", ArrowRight: "x+", ArrowUp: "z-", ArrowDown: "z+", "[": "rot-", "{": "rot-", "]": "rot+", "}": "rot+", PageUp: "y+", PageDown: "y-", "+": "s+", "=": "s+", "-": "s-", _: "s-" };
-  if (map[e.key]) { e.preventDefault(); nudge(map[e.key], e.shiftKey ? 10 : 1); }
+  // no keyboard nudging: arrow keys used to move the scan / model by accident (use the step 3 buttons)
 });
 
 function updateXform() {
@@ -2691,7 +2689,8 @@ function rulerPoint(ev) {
   const dr = dHit && sheets.find((r) => r.mesh === dHit.object);
   if (dr && (dr.opts.order === "top" || dist(dHit.point) <= Math.min(dist(hit?.point), dist(sp)) + 0.05)) {
     showElemOutline(null);
-    return dim.snap ? drawingSnap(dr, dHit, wppAt(dHit.point)) : { p: dHit.point.clone(), kind: "surface" };
+    const frame = () => yawOf(dr.group.quaternion);
+    return { ...(dim.snap ? drawingSnap(dr, dHit, wppAt(dHit.point)) : { p: dHit.point.clone(), kind: "surface" }), frame };
   }
   const near = hit && dist(hit.point) <= dist(sp) + 0.05;
   if (!near) { showElemOutline(null); return sp ? { p: sp, kind: "scan" } : null; }
@@ -2720,13 +2719,40 @@ function rulerPoint(ev) {
     if (d < bestD) { bestD = d; best = [px, py, pz]; }
   }
   // corners win within ~10 px, then edges
-  if (vert && vertD < R * 0.75) return { p: new THREE.Vector3(...vert).applyMatrix4(m.matrixWorld), kind: "vertex" };
-  if (best) return { p: new THREE.Vector3(...best).applyMatrix4(m.matrixWorld), kind: "edge" };
-  return { p: hit.point.clone(), kind: "surface" };
+  const frame = () => edgeFrame(E, m.matrixWorld);
+  if (vert && vertD < R * 0.75) return { p: new THREE.Vector3(...vert).applyMatrix4(m.matrixWorld), kind: "vertex", frame };
+  if (best) return { p: new THREE.Vector3(...best).applyMatrix4(m.matrixWorld), kind: "edge", frame };
+  return { p: hit.point.clone(), kind: "surface", frame };
 }
 const SNAP_COLOR = { vertex: 0xef4444, edge: 0xf59e0b, surface: 0xffffff, scan: 0x22c55e };
-// ortho (like CAD F8), only while the first point is down: the second point is held level with the
-// floor (same height as A) or plumb (straight above / below A), whichever the mouse direction is closer to
+// axes of the object under the first point (SketchUp style): the dominant plan direction of its outline
+// edges (lengths folded modulo 90°), returned as a yaw angle
+function edgeFrame(E, mw) {
+  const e = mw.elements;
+  let c = 0, sn = 0;
+  for (let i = 0; i < E.length; i += 6) {
+    const lx = E[i + 3] - E[i], ly = E[i + 4] - E[i + 1], lz = E[i + 5] - E[i + 2];
+    const dx = e[0] * lx + e[4] * ly + e[8] * lz, dy = e[1] * lx + e[5] * ly + e[9] * lz, dz = e[2] * lx + e[6] * ly + e[10] * lz;
+    const h = Math.hypot(dx, dz);
+    if (h < 1e-6 || Math.abs(dy) > 0.3 * h) continue; // plan-direction edges only
+    const a = Math.atan2(dz, dx) * 4;
+    c += h * Math.cos(a); sn += h * Math.sin(a);
+  }
+  return c || sn ? Math.atan2(sn, c) / 4 : null;
+}
+// fallback axes: the selected model / drawing, else the world
+function defaultFrame() { return state.activeRef ? yawOf(state.activeRef.group.quaternion) : 0; }
+const AXES = [
+  { name: "x", color: 0xef4444, css: "#ef4444" },
+  { name: "y", color: 0x3b82f6, css: "#3b82f6" },
+  { name: "z", color: 0x22c55e, css: "#16a34a" },
+];
+function axisDirs(theta) {
+  // x / z follow the object's plan directions, y is plumb (floor normal)
+  return [new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta)), new THREE.Vector3(0, 1, 0), new THREE.Vector3(-Math.sin(theta), 0, Math.cos(theta))];
+}
+// ortho (like CAD F8 / SketchUp inference), only while the first point is down: the second point slides
+// along the snapped object's red / green (plan) or blue (plumb) axis, whichever the mouse direction follows
 function toScreen(v) {
   const rc = canvas.getBoundingClientRect(), q = v.clone().project(camera);
   return new THREE.Vector2((q.x + 1) / 2 * rc.width + rc.left, (1 - q.y) / 2 * rc.height + rc.top);
@@ -2735,25 +2761,28 @@ function rulerTarget(ev) {
   const r = rulerPoint(ev);
   if (!dim.a || !dim.ortho) return r && { ...r, mode: null };
   const A = dim.a, sA = toScreen(A);
-  const up = toScreen(A.clone().add(new THREE.Vector3(0, 1, 0))).sub(sA).normalize();
   const m = new THREE.Vector2(ev.clientX, ev.clientY).sub(sA);
-  const vertical = m.length() > 4 && Math.abs(m.clone().normalize().dot(up)) > Math.cos(35 * DEG);
-  rayFrom(ev);
-  let p;
-  if (vertical) {
-    // a snapped point gives the height; otherwise the point on the plumb line nearest to the cursor ray
-    if (r && r.kind !== "surface" && r.kind !== "scan") p = new THREE.Vector3(A.x, r.p.y, A.z);
-    else {
-      const q = new THREE.Vector3();
-      raycaster.ray.distanceSqToSegment(A.clone().add(new THREE.Vector3(0, -1000, 0)), A.clone().add(new THREE.Vector3(0, 1000, 0)), null, q);
-      p = q;
-    }
-  } else if (r && r.kind !== "surface" && r.kind !== "scan") p = new THREE.Vector3(r.p.x, A.y, r.p.z);
-  else {
-    p = new THREE.Vector3();
-    if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -A.y), p)) p = r ? new THREE.Vector3(r.p.x, A.y, r.p.z) : null;
+  const dirs = axisDirs(dim.frame ?? 0);
+  // the axis whose on-screen direction best matches the mouse
+  let k = 1, bestDot = -1;
+  if (m.length() > 4) {
+    const mh = m.clone().normalize();
+    dirs.forEach((d, i) => {
+      const sd = toScreen(A.clone().add(d)).sub(sA);
+      if (sd.length() < 1e-3) return;
+      const dot = Math.abs(mh.dot(sd.normalize()));
+      if (dot > bestDot) { bestDot = dot; k = i; }
+    });
   }
-  return p && { p, kind: r?.kind ?? "surface", mode: vertical ? "v" : "h" };
+  const d = dirs[k];
+  let p;
+  if (r && (r.kind === "vertex" || r.kind === "edge")) p = A.clone().addScaledVector(d, r.p.clone().sub(A).dot(d)); // snapped point, projected on the axis
+  else {
+    rayFrom(ev);
+    p = new THREE.Vector3();
+    raycaster.ray.distanceSqToSegment(A.clone().addScaledVector(d, -1000), A.clone().addScaledVector(d, 1000), null, p);
+  }
+  return { p, kind: r?.kind ?? "surface", mode: AXES[k].name, axis: AXES[k] };
 }
 const liveLabel = new THREE.Object3D();
 liveLabel.add(label("", "dim3d"));
@@ -2765,7 +2794,9 @@ function showLive(a, b, mode) {
   liveLabel.position.copy(a).add(b).multiplyScalar(0.5);
   const el = liveLabel.children[0].element;
   el.style.display = "";
-  el.textContent = `${mode === "v" ? "↕ " : mode === "h" ? "↔ " : ""}${mm(a.distanceTo(b))}`;
+  const ax = AXES.find((o) => o.name === mode);
+  el.textContent = `${ax ? ax.name.toUpperCase() + " " : ""}${mm(a.distanceTo(b))}`;
+  el.style.background = ax ? ax.css : "";
 }
 let hoverQueued = null;
 canvas.addEventListener("pointermove", (e) => {
@@ -2779,7 +2810,11 @@ canvas.addEventListener("pointermove", (e) => {
     if (!r) { elemLine.visible = false; showLive(null); return; }
     snapMark.position.copy(r.p);
     snapMark.material.color.setHex(SNAP_COLOR[r.kind]);
-    if (dim.a) { dim.rubber.geometry.setPositions([dim.a.x, dim.a.y, dim.a.z, r.p.x, r.p.y, r.p.z]); showLive(dim.a, r.p, r.mode); }
+    if (dim.a) {
+      dim.rubber.geometry.setPositions([dim.a.x, dim.a.y, dim.a.z, r.p.x, r.p.y, r.p.z]);
+      dim.rubber.material.color.setHex(r.axis ? r.axis.color : 0xffd166);
+      showLive(dim.a, r.p, r.mode);
+    }
   });
 });
 // drop a measurement that was started but not finished (Esc, close, toggle, clear)
@@ -2794,6 +2829,7 @@ function rulerClick(ev) {
   if (!r) return toast("스캔이나 모델 위를 클릭하세요", 2000);
   if (!dim.a) {
     dim.a = r.p.clone();
+    dim.frame = (typeof r.frame === "function" ? r.frame() : null) ?? defaultFrame();
     const d = dot(0xffd166); d.position.copy(dim.a); d.renderOrder = 2003;
     dim.aDot = d;
     dim.rubber = fatLine(dim.a, dim.a, 0xffd166, 3);
@@ -2827,11 +2863,11 @@ function renderDimCard() {
   card.classList.remove("hidden");
   card.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid fa-ruler-combined text-amber-500"></i><span class="font-extrabold text-gray-900 text-xs flex-1">자</span>
       <label class="flex items-center gap-1 text-[10px] text-gray-500" title="도면·BIM 객체(벽체·매스) 외곽선의 꼭짓점·모서리에 스냅"><input id="dim-snap" type="checkbox" ${dim.snap ? "checked" : ""} class="accent-[#f59e0b]"><i class="fa-solid fa-magnet"></i>스냅</label>
-      <label class="flex items-center gap-1 text-[10px] text-gray-500" title="첫 점을 찍은 뒤 바닥 기준 수평/수직으로만 (F8)"><input id="dim-ortho" type="checkbox" ${dim.ortho ? "checked" : ""} class="accent-[#f59e0b]">직교 F8</label>
+      <label class="flex items-center gap-1 text-[10px] text-gray-500" title="첫 점을 찍은 뒤 스냅한 객체의 X(빨강)·Z(초록) 방향이나 수직 Y(파랑)으로만 (F8)"><input id="dim-ortho" type="checkbox" ${dim.ortho ? "checked" : ""} class="accent-[#f59e0b]">직교 F8</label>
       <button id="dim-clear" class="text-gray-300 hover:text-red-500 px-1" title="측정 모두 지우기"><i class="fa-solid fa-trash-can"></i></button>
       <button id="dim-close" class="text-gray-300 hover:text-gray-600 px-1" title="닫기"><i class="fa-solid fa-xmark"></i></button></div>
     ${dim.list.length ? `<div class="mt-2 space-y-0.5">${dim.list.map((m, i) => `<div class="flex items-baseline gap-1.5"><span class="text-[10px] text-gray-400 w-3">${i + 1}</span><b class="font-mono text-gray-900">${mm(m.d)} mm</b><span class="text-[10px] text-gray-400 truncate">수평 ${mm(m.h)} · 높이 ${mm(m.v)}</span></div>`).join("")}</div>` : ""}
-    <p class="mt-1.5 text-[10px] text-gray-400"><span style="color:#ef4444">●</span> 꼭짓점 <span style="color:#f59e0b">●</span> 모서리</p>`;
+    <p class="mt-1.5 text-[10px] text-gray-400"><span style="color:#ef4444">●</span> 꼭짓점 <span style="color:#f59e0b">●</span> 모서리 <span class="ml-1 font-bold" style="color:#ef4444">X</span> <span class="font-bold" style="color:#3b82f6">Y</span> <span class="font-bold" style="color:#16a34a">Z</span></p>`;
   $("dim-close").onclick = () => setDimMode(false);
   $("dim-clear").onclick = () => { clearDim(); renderDimCard(); };
   $("dim-snap").onchange = (e) => { dim.snap = e.target.checked; };
