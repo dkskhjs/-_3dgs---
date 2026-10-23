@@ -2612,7 +2612,7 @@ function setDimMode(on) {
   showLive(null);
   if (on) {
     renderDimCard();
-    toast("자: 두 점을 클릭해 거리를 잽니다 (도면·BIM 객체 외곽선에 스냅)", 3500);
+    toast("자: 두 점을 클릭해 거리를 잽니다 · Esc 나가기", 3000);
   } else $("dim-card").classList.add("hidden");
 }
 $("tool-ruler").onclick = () => setDimMode(!dim.on);
@@ -2876,8 +2876,13 @@ function renderDimCard() {
 window.addEventListener("keydown", (e) => {
   if (!dim.on) return;
   if (e.key === "F8") { e.preventDefault(); dim.ortho = !dim.ortho; renderDimCard(); return toast(`직교 ${dim.ortho ? "켜짐" : "꺼짐"} (F8)`, 1200); }
-  if (e.key !== "Escape" || !dim.a) return;
-  cancelPending();
+  if (e.key === "Escape") setDimMode(false); // leaves ruler mode (and drops a measurement in progress)
+});
+// L: ruler on / off
+window.addEventListener("keydown", (e) => {
+  if (e.code !== "KeyL" || e.ctrlKey || e.metaKey || e.altKey || typing(e) || pick) return;
+  e.preventDefault();
+  setDimMode(!dim.on);
 });
 
 $("btn-land").onclick = async () => {
