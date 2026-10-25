@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="홈">
+<meta name="theme-color" content="#000000">
+<title>홈</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  :root {
+    --bg: #000;
+    --card: #1c1c1e;
+    --edge: rgba(255, 255, 255, 0.10);
+    --text: #f5f5f7;
+    --dim: rgba(255, 255, 255, 0.45);
+    --gutter: 24px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Pretendard Variable", Pretendard, -apple-system, system-ui, sans-serif;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    padding: calc(env(safe-area-inset-top) + 12px) 0 calc(env(safe-area-inset-bottom) + 12px);
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--edge);
+    border-radius: 30px;
+  }
+
+  /* 시계 */
+  .clock { margin: 0 var(--gutter); padding: 30px 32px 28px; }
+  .time { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .date { margin-top: 12px; font-size: 17px; font-weight: 600; }
+
+  /* 앱 목록 (페이지 넘김) */
+  .pages {
+    flex: 1;
+    min-height: 0;
+    margin-top: 18px;
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .pages::-webkit-scrollbar { display: none; }
+  .page { flex: 0 0 100%; scroll-snap-align: start; padding: 0 var(--gutter); }
+  .list { padding: 26px 32px; display: flex; flex-direction: column; }
+  .app {
+    display: block;
+    width: 100%;
+    padding: 12px 0;
+    border: 0;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 27px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-align: left;
+    cursor: pointer;
+    transition: opacity 0.12s;
+  }
+  .app:active { opacity: 0.4; }
+
+  .dots { display: flex; justify-content: center; gap: 10px; padding: 14px 0 16px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); transition: background 0.2s; }
+  .dot.on { background: var(--text); }
+
+  /* 독 */
+  .dock {
+    margin: 0 14px;
+    padding: 12px;
+    border-radius: 34px;
+    display: flex;
+    justify-content: center;
+    gap: 22px;
+  }
+  .dock .app {
+    width: auto;
+    padding: 14px 18px;
+    font-size: 18px;
+    text-align: center;
+  }
+
+  /* 편집 */
+  .editor {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    padding: calc(env(safe-area-inset-top) + 16px) 20px calc(env(safe-area-inset-bottom) + 16px);
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .editor.open { display: flex; }
+  .editor h2 { font-size: 22px; font-weight: 700; }
+  .editor p { font-size: 14px; line-height: 1.5; color: var(--dim); }
+  .editor textarea {
+    flex: 1;
+    width: 100%;
+    padding: 16px;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--edge);
+    border-radius: 16px;
+    font: 15px/1.6 ui-monospace, Menlo, monospace;
+    resize: none;
+  }
+  .row { display: flex; gap: 10px; }
+  .row button {
+    flex: 1;
+    padding: 14px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--card);
+    color: var(--text);
+    font: inherit;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .row button.primary { background: var(--text); color: var(--bg); }
+</style>
+</head>
+<body>
+  <section class="card clock" id="clock">
+    <div class="time" id="time">--:--</div>
+    <div class="date" id="date"></div>
+  </section>
+
+  <main class="pages" id="pages"></main>
+  <nav class="dots" id="dots"></nav>
+  <footer class="card dock" id="dock"></footer>
+
+  <section class="editor" id="editor">
+    <h2>앱 편집</h2>
+    <p>한 줄에 <b>이름 | 주소</b>. <b>---</b> 줄로 페이지를 나누고, <b>[독]</b> 아래 줄은 하단 독에 들어갑니다.
+      주소가 없는 앱은 단축어로 열 수 있습니다: <b>shortcuts://run-shortcut?name=단축어이름</b></p>
+    <textarea id="config" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
+    <div class="row">
+      <button id="reset">기본값</button>
+      <button id="cancel">취소</button>
+      <button id="save" class="primary">저장</button>
+    </div>
+  </section>
+
+<script>
+const DEFAULT_CONFIG = `지메일 | googlegmail://
+메시지 | sms:
+토스 | supertoss://
+네이버 지도 | nmap://
+플립보드 | flipboard://
+애플 뮤직 | music://
+---
+구글 킵 | comgooglekeep://
+티빙 | tving://
+사진 | photos-redirect://
+시계 | clock-alarm://
+브레이브 | brave://
+[독]
+전화 | mobilephone://
+카카오톡 | kakaotalk://
+사파리 | x-web-search://`;
+
+const STORE_KEY = "launcher.config";
+
+function loadConfig() {
+  try { return localStorage.getItem(STORE_KEY) || DEFAULT_CONFIG; } catch { return DEFAULT_CONFIG; }
+}
+
+function saveConfig(text) {
+  try { localStorage.setItem(STORE_KEY, text); } catch {}
+}
+
+function parse(text) {
+  const pages = [[]];
+  const dock = [];
+  let inDock = false;
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line === "[독]") { inDock = true; continue; }
+    if (line === "---") { if (!inDock) pages.push([]); continue; }
+    const [name, url = ""] = line.split("|").map(s => s.trim());
+    const app = { name, url };
+    if (inDock) dock.push(app); else pages[pages.length - 1].push(app);
+  }
+  return { pages: pages.filter(p => p.length), dock };
+}
+
+function appButton({ name, url }) {
+  const b = document.createElement("button");
+  b.className = "app";
+  b.textContent = name;
+  b.addEventListener("click", () => { if (url) location.href = url; });
+  return b;
+}
+
+const pagesEl = document.getElementById("pages");
+const dotsEl = document.getElementById("dots");
+const dockEl = document.getElementById("dock");
+
+function render() {
+  const { pages, dock } = parse(loadConfig());
+  pagesEl.replaceChildren(...pages.map(apps => {
+    const page = document.createElement("div");
+    page.className = "page";
+    const list = document.createElement("div");
+    list.className = "card list";
+    list.append(...apps.map(appButton));
+    page.append(list);
+    return page;
+  }));
+  dotsEl.replaceChildren(...pages.map((_, i) => {
+    const d = document.createElement("span");
+    d.className = "dot" + (i === 0 ? " on" : "");
+    return d;
+  }));
+  dotsEl.style.visibility = pages.length > 1 ? "visible" : "hidden";
+  dockEl.replaceChildren(...dock.map(appButton));
+  dockEl.style.display = dock.length ? "" : "none";
+  pagesEl.scrollLeft = 0;
+}
+
+pagesEl.addEventListener("scroll", () => {
+  const i = Math.round(pagesEl.scrollLeft / pagesEl.clientWidth);
+  [...dotsEl.children].forEach((d, j) => d.classList.toggle("on", i === j));
+}, { passive: true });
+
+// 시계
+const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+function tick() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  document.getElementById("time").textContent = `${hh}:${mm}`;
+  document.getElementById("date").textContent =
+    `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${DAYS[now.getDay()]}요일`;
+}
+tick();
+setTimeout(() => { tick(); setInterval(tick, 60000); }, (60 - new Date().getSeconds()) * 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+
+// 편집: 시계를 길게 누르면 열림
+const editor = document.getElementById("editor");
+const configEl = document.getElementById("config");
+let pressTimer;
+const clockEl = document.getElementById("clock");
+clockEl.addEventListener("touchstart", () => {
+  pressTimer = setTimeout(() => { configEl.value = loadConfig(); editor.classList.add("open"); }, 700);
+}, { passive: true });
+["touchend", "touchmove", "touchcancel"].forEach(e => clockEl.addEventListener(e, () => clearTimeout(pressTimer)));
+clockEl.addEventListener("contextmenu", e => { e.preventDefault(); configEl.value = loadConfig(); editor.classList.add("open"); });
+
+document.getElementById("save").onclick = () => { saveConfig(configEl.value); editor.classList.remove("open"); render(); };
+document.getElementById("cancel").onclick = () => editor.classList.remove("open");
+document.getElementById("reset").onclick = () => { configEl.value = DEFAULT_CONFIG; };
+
+render();
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
